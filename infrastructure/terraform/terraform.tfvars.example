@@ -1,0 +1,24 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "jarvis"
+environment  = "dev"
+
+# Instance Configuration
+# Choose bundle based on your needs and budget:
+# nano_3_0: $3.50/month - 0.5 vCPU, 512 MB RAM, 20 GB SSD (too small for demo)
+# micro_3_0: $5/month - 1 vCPU, 1 GB RAM, 40 GB SSD (minimum for demo)
+# small_3_0: $10/month - 1 vCPU, 2 GB RAM, 60 GB SSD (recommended for demo)
+# medium_3_0: $20/month - 2 vCPU, 4 GB RAM, 80 GB SSD (best for demo)
+instance_bundle_id    = "small_3_0"
+instance_blueprint_id = "ubuntu_22_04"
+
+# Database Configuration
+enable_managed_database = true  # Set to false to use containerized PostgreSQL
+db_bundle_id            = "micro_2_0"  # $15/month - 1 vCPU, 1 GB RAM, 40 GB SSD
+db_master_username      = "jarvisadmin"
+db_master_password      = "CHANGE_ME_SECURE_PASSWORD"  # Use environment variable: TF_VAR_db_master_password
+
+# Domain Configuration (optional)
+domain_name = ""  # e.g., "jarvis.example.com"
