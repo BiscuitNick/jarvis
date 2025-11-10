@@ -323,15 +323,108 @@ docker-compose restart
 docker-compose restart ingress
 ```
 
-### Database Backup
+### Database Backup & Restore
+
+The project includes automated backup scripts with cron scheduling and TTL cleanup for logs and sessions.
+
+#### Automated Daily Backups
+
+Backups are automatically created daily at 4:00 AM via cron (configured during setup):
 
 ```bash
-# Backup PostgreSQL
-docker-compose exec postgres pg_dump -U postgres jarvis > backup.sql
+# Backup location
+/opt/jarvis/backups/jarvis-YYYYMMDD-HHMMSS.sql
+
+# Backup logs
+/opt/jarvis/logs/db-backup.log
+```
+
+Backups are retained for 7 days by default (configurable via `BACKUP_RETENTION_DAYS` environment variable).
+
+#### Manual Backup
+
+```bash
+# Using the backup script (recommended)
+cd /opt/jarvis
+./infrastructure/scripts/db-backup.sh
+
+# Direct docker-compose method
+cd /opt/jarvis/infrastructure/docker
+docker-compose exec -T postgres pg_dump -U postgres jarvis > /opt/jarvis/backups/manual-backup-$(date +%Y%m%d-%H%M%S).sql
+```
+
+#### Database Restore
+
+```bash
+# Using the restore script (recommended)
+cd /opt/jarvis
+./infrastructure/scripts/db-restore.sh /opt/jarvis/backups/jarvis-20250110-120000.sql
+
+# Direct docker-compose method
+cd /opt/jarvis/infrastructure/docker
+cat /opt/jarvis/backups/jarvis-20250110-120000.sql | docker-compose exec -T postgres psql -U postgres jarvis
+```
+
+**⚠️ Warning:** Restore operations will overwrite the current database. The restore script prompts for confirmation.
+
+#### Testing Backup/Restore
+
+```bash
+# 1. Insert a test row
+docker-compose exec -T postgres psql -U postgres -d jarvis -c "INSERT INTO users(device_token) VALUES('backup_test_token');"
+
+# 2. Run backup
+./infrastructure/scripts/db-backup.sh
+
+# 3. Delete the test row
+docker-compose exec -T postgres psql -U postgres -d jarvis -c "DELETE FROM users WHERE device_token='backup_test_token';"
+
+# 4. Restore from backup
+./infrastructure/scripts/db-restore.sh /opt/jarvis/backups/jarvis-YYYYMMDD-HHMMSS.sql
+
+# 5. Verify restoration
+docker-compose exec -T postgres psql -U postgres -d jarvis -c "SELECT count(*) FROM users WHERE device_token='backup_test_token';"
+```
+
+#### TTL Cleanup
+
+Automated TTL cleanup runs daily at 3:15 AM to remove:
+- Expired logs (24-hour retention)
+- Expired sessions
+
+```bash
+# Manual TTL cleanup
+cd /opt/jarvis
+./infrastructure/scripts/run-db-ttl-cleanup.sh
+
+# View cleanup logs
+tail -f /opt/jarvis/logs/db-maintenance.log
+```
+
+#### Backup for Managed PostgreSQL
+
+If using Lightsail managed PostgreSQL instead of containerized database:
+
+```bash
+# Update TTL cleanup script to use PGHOST/PGPORT
+export PGHOST=your-database-endpoint.amazonaws.com
+export PGPORT=5432
+export POSTGRES_USER=dbadmin
+export POSTGRES_PASSWORD=your_password
+export POSTGRES_DB=jarvis
+
+# Run cleanup
+psql -h $PGHOST -p $PGPORT -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT cleanup_expired_logs();"
+psql -h $PGHOST -p $PGPORT -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT cleanup_expired_sessions();"
+
+# Backup
+pg_dump -h $PGHOST -p $PGPORT -U $POSTGRES_USER $POSTGRES_DB > backup.sql
 
 # Restore
-docker-compose exec -T postgres psql -U postgres jarvis < backup.sql
+psql -h $PGHOST -p $PGPORT -U $POSTGRES_USER -d $POSTGRES_DB < backup.sql
 ```
+
+Add managed database credentials to cron jobs in `setup-lightsail.sh` if using managed PostgreSQL.
 
 ### Scale Services
 

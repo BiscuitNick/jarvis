@@ -24,6 +24,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # Database Migrations - Run versioned SQL migrations
+  db-migrations:
+    image: postgres:15-alpine
+    container_name: jarvis-db-migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jarvis}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    volumes:
+      - ../scripts/run-migrations.sh:/scripts/run-migrations.sh:ro
+      - ./postgres/migrations:/migrations:ro
+    networks:
+      - jarvis-network
+    command: sh -c "chmod +x /scripts/run-migrations.sh && /scripts/run-migrations.sh"
+    restart: "no"
+
   # Redis for caching and session management
   redis:
     image: redis:7-alpine
@@ -45,10 +66,12 @@ services:
   # Ingress Service - WebRTC audio streaming and session management
   ingress:
     build:
-      context: ../../services/ingress
+      context: ../../services/ingress-service
       dockerfile: Dockerfile
     container_name: jarvis-ingress
     restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${INGRESS_PORT:-3000}
@@ -57,6 +80,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT secret required}
       ASR_GATEWAY_URL: http://asr-gateway:3001
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      PGPOOL_MAX_INGRESS: ${PGPOOL_MAX_INGRESS:-5}
+      PG_CONN_TIMEOUT_MS: ${PG_CONN_TIMEOUT_MS:-2000}
+      PG_IDLE_TIMEOUT_MS: ${PG_IDLE_TIMEOUT_MS:-10000}
+      PG_CONNECT_RETRIES: ${PG_CONNECT_RETRIES:-3}
     ports:
       - "3000:3000"
       - "3478:3478/tcp"  # TURN/STUN TCP
@@ -69,7 +96,7 @@ services:
     networks:
       - jarvis-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -81,6 +108,8 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis-asr-gateway
     restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${ASR_PORT:-3001}
@@ -95,7 +124,7 @@ services:
     networks:
       - jarvis-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -107,6 +136,8 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis-rag-service
     restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${RAG_PORT:-3002}
@@ -116,6 +147,10 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       KNOWLEDGE_REFRESH_INTERVAL: ${KNOWLEDGE_REFRESH_INTERVAL:-180000}  # 3 minutes in ms
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      PGPOOL_MAX_RAG: ${PGPOOL_MAX_RAG:-10}
+      PG_CONN_TIMEOUT_MS: ${PG_CONN_TIMEOUT_MS:-2000}
+      PG_IDLE_TIMEOUT_MS: ${PG_IDLE_TIMEOUT_MS:-10000}
+      PG_CONNECT_RETRIES: ${PG_CONNECT_RETRIES:-3}
     ports:
       - "3002:3002"
     depends_on:
@@ -124,7 +159,7 @@ services:
     networks:
       - jarvis-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3002/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3002/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -136,9 +171,12 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis-llm-router
     restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${LLM_PORT:-3003}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-jarvis}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
@@ -148,6 +186,10 @@ services:
       MAX_QUERY_TIMEOUT: ${MAX_QUERY_TIMEOUT:-10000}  # 10 seconds
       MAX_PLANNING_STEPS: ${MAX_PLANNING_STEPS:-2}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      PGPOOL_MAX_LLM: ${PGPOOL_MAX_LLM:-4}
+      PG_CONN_TIMEOUT_MS: ${PG_CONN_TIMEOUT_MS:-2000}
+      PG_IDLE_TIMEOUT_MS: ${PG_IDLE_TIMEOUT_MS:-10000}
+      PG_CONNECT_RETRIES: ${PG_CONNECT_RETRIES:-3}
     ports:
       - "3003:3003"
     depends_on:
@@ -155,7 +197,7 @@ services:
     networks:
       - jarvis-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -167,6 +209,8 @@ services:
       dockerfile: Dockerfile
     container_name: jarvis-tts-service
     restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${TTS_PORT:-3004}
@@ -187,7 +231,7 @@ services:
     networks:
       - jarvis-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3004/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3004/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3

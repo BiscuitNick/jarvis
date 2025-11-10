@@ -144,6 +144,15 @@ log_info "Setting up health check cron job..."
 log_info "Setting up log cleanup cron job..."
 (crontab -u ubuntu -l 2>/dev/null || true; echo "0 2 * * * find $DEPLOYMENT_PATH/logs -type f -mtime +7 -delete") | crontab -u ubuntu -
 
+# Setup database TTL cleanup cron job (daily at 3:15 AM)
+log_info "Setting up database TTL cleanup cron job..."
+(crontab -u ubuntu -l 2>/dev/null || true; echo "15 3 * * * $DEPLOYMENT_PATH/infrastructure/scripts/run-db-ttl-cleanup.sh >> $DEPLOYMENT_PATH/logs/db-maintenance.log 2>&1") | crontab -u ubuntu -
+
+# Setup database backup cron job (daily at 4:00 AM)
+log_info "Setting up database backup cron job..."
+mkdir -p /opt/jarvis/backups
+(crontab -u ubuntu -l 2>/dev/null || true; echo "0 4 * * * $DEPLOYMENT_PATH/infrastructure/scripts/db-backup.sh >> $DEPLOYMENT_PATH/logs/db-backup.log 2>&1") | crontab -u ubuntu -
+
 # Install AWS CLI (optional)
 log_info "Installing AWS CLI..."
 if ! command -v aws &> /dev/null; then

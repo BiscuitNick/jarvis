@@ -92,6 +92,25 @@ build_services() {
     docker-compose -f "$DOCKER_COMPOSE_FILE" build --parallel
 }
 
+run_migrations() {
+    log_info "Running database migrations..."
+
+    cd "$DEPLOYMENT_PATH"
+
+    # Ensure postgres is running first
+    docker-compose -f "$DOCKER_COMPOSE_FILE" up -d postgres
+    log_info "Waiting for database to be ready..."
+    sleep 10
+
+    # Run migrations
+    if docker-compose -f "$DOCKER_COMPOSE_FILE" run --rm db-migrations; then
+        log_info "Database migrations completed successfully"
+    else
+        log_error "Database migrations failed"
+        return 1
+    fi
+}
+
 start_services() {
     log_info "Starting services..."
 
@@ -148,6 +167,13 @@ main() {
     stop_services
     pull_changes
     build_services
+
+    if ! run_migrations; then
+        rollback
+        log_error "❌ Migration failed, deployment aborted"
+        exit 1
+    fi
+
     start_services
 
     if health_check; then
