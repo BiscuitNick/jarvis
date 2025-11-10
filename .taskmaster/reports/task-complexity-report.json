@@ -1,0 +1,93 @@
+{
+	"meta": {
+		"generatedAt": "2025-11-10T18:25:30.285Z",
+		"tasksAnalyzed": 10,
+		"totalTasks": 10,
+		"analysisCount": 10,
+		"thresholdScore": 5,
+		"projectName": "Taskmaster",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 1,
+			"taskTitle": "Set up AWS infrastructure and project foundation",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down infrastructure setup into: 1) VPC and networking configuration, 2) ECS/Fargate cluster setup, 3) ECR repositories and Docker configurations, 4) CI/CD pipeline implementation, 5) Environment-specific deployments (dev/staging/prod), 6) IAM roles and security policies",
+			"reasoning": "High complexity due to comprehensive AWS infrastructure setup requiring expertise in multiple services, networking, security, and DevOps practices. Foundation task that impacts all subsequent development."
+		},
+		{
+			"taskId": 2,
+			"taskTitle": "Implement Aurora Postgres database with pgvector extension",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Divide into: 1) Aurora cluster setup with pgvector extension, 2) Database schema design and creation, 3) RDS Proxy and connection pooling, 4) Migration system implementation, 5) Backup/restore procedures and TTL cleanup jobs",
+			"reasoning": "Moderately high complexity involving specialized pgvector extension, complex schema design for embeddings, and operational considerations like TTL and connection pooling."
+		},
+		{
+			"taskId": 3,
+			"taskTitle": "Build ingress service for audio streaming and session management",
+			"complexityScore": 9,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "Break into: 1) WebRTC media server setup (mediasoup/Pion), 2) Audio chunk reception and processing, 3) gRPC/HTTP2 endpoint implementation, 4) Session state management, 5) Authentication system, 6) Structured logging, 7) Auto-scaling configuration",
+			"reasoning": "Very high complexity due to real-time audio streaming, WebRTC implementation, concurrent session management, and multiple communication protocols. Critical for system performance."
+		},
+		{
+			"taskId": 4,
+			"taskTitle": "Integrate cloud ASR services with streaming support",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Organize as: 1) Multi-provider ASR integration (Deepgram, Google, Azure), 2) Streaming WebSocket connections, 3) Real-time transcription handling, 4) Provider fallback logic, 5) Voice activity detection integration, 6) Latency optimization and WER metrics",
+			"reasoning": "High complexity involving multiple cloud providers, real-time streaming, strict latency requirements (<500ms), and sophisticated fallback mechanisms."
+		},
+		{
+			"taskId": 5,
+			"taskTitle": "Implement RAG service with pgvector knowledge indexing",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Structure as: 1) Document ingestion pipeline, 2) Embedding generation and storage, 3) Semantic search implementation, 4) Citation system, 5) Knowledge refresh automation, 6) Grounding validation",
+			"reasoning": "High complexity requiring expertise in vector embeddings, semantic search, document processing pipelines, and real-time knowledge updates with citation tracking."
+		},
+		{
+			"taskId": 6,
+			"taskTitle": "Build LLM router with managed frontier model integration",
+			"complexityScore": 9,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "Divide into: 1) Multi-provider LLM integrations (OpenAI, Anthropic, Google), 2) Streaming response handling, 3) System prompt engineering and intent classification, 4) Retrieval enforcement logic, 5) Hybrid planning layer, 6) Timeout and step limit controls, 7) Provider fallback mechanisms",
+			"reasoning": "Very high complexity involving multiple LLM providers, sophisticated prompt engineering, intent classification, streaming responses, and complex orchestration logic with strict performance constraints."
+		},
+		{
+			"taskId": 7,
+			"taskTitle": "Integrate cloud TTS services for neural voice synthesis",
+			"complexityScore": 7,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down as: 1) Multi-provider TTS integration (Google, Azure, Amazon), 2) Streaming audio synthesis, 3) Audio optimization and caching, 4) Voice interruption handling, 5) Accessibility features and performance testing",
+			"reasoning": "Moderately high complexity with multiple cloud providers, real-time audio streaming, caching strategies, and interruption handling for responsive user experience."
+		},
+		{
+			"taskId": 8,
+			"taskTitle": "Develop iOS client app with wake-word detection and VAD",
+			"complexityScore": 9,
+			"recommendedSubtasks": 8,
+			"expansionPrompt": "Structure as: 1) iOS project setup and architecture, 2) Wake-word detection implementation, 3) Voice Activity Detection (<150ms), 4) WebRTC client integration, 5) gRPC client implementation, 6) UI components (waveform, transcript, sources), 7) Audio session management, 8) Device authentication",
+			"reasoning": "Very high complexity requiring native iOS development, real-time audio processing, strict latency requirements, WebRTC implementation, and sophisticated UI for real-time interactions."
+		},
+		{
+			"taskId": 9,
+			"taskTitle": "Implement real-time coordination and streaming orchestration",
+			"complexityScore": 10,
+			"recommendedSubtasks": 8,
+			"expansionPrompt": "Organize as: 1) Service orchestration architecture, 2) Real-time state management, 3) Progressive response delivery, 4) Session context management, 5) Interruption handling system, 6) Latency monitoring and optimization, 7) Graceful degradation, 8) End-to-end performance testing",
+			"reasoning": "Maximum complexity as this coordinates all services, requires sophisticated real-time orchestration, strict latency constraints (<500ms), complex state management, and robust error handling across the entire system."
+		},
+		{
+			"taskId": 10,
+			"taskTitle": "Add monitoring, analytics, and basic admin configuration",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Divide into: 1) Monitoring stack setup (CloudWatch/Prometheus), 2) Structured logging implementation, 3) Admin panel development, 4) Analytics dashboard creation, 5) Alerting and runbook documentation",
+			"reasoning": "Moderate complexity involving standard monitoring practices, dashboard development, and operational tooling. Less complex than core services but requires comprehensive coverage of system metrics."
+		}
+	]
+}

@@ -1,0 +1,840 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Set up AWS infrastructure and project foundation",
+        "description": "Initialize AWS infrastructure with ECS/Fargate cluster, networking, and CI/CD pipeline for the Jarvis backend services",
+        "details": "Set up AWS ECS/Fargate cluster with VPC, subnets, security groups, and load balancers. Create ECR repositories for Docker images. Set up GitHub Actions or CodePipeline for CI/CD. Create base Docker configurations and infrastructure-as-code (Terraform/CDK) templates. Establish development, staging, and production environments with proper IAM roles and policies.",
+        "testStrategy": "Validate infrastructure deployment with smoke tests. Verify ECS cluster can run basic container workloads. Test CI/CD pipeline with dummy service deployments. Check networking connectivity between services.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Configure VPC and core networking infrastructure",
+            "description": "Set up AWS VPC with public and private subnets across multiple availability zones, configure NAT gateways, internet gateways, and route tables for secure network architecture",
+            "dependencies": [],
+            "details": "Create VPC with CIDR block planning for dev/staging/prod environments. Configure public subnets for load balancers and NAT gateways, private subnets for ECS tasks. Set up route tables, security groups with least privilege access, and network ACLs. Configure VPC endpoints for AWS services to reduce NAT gateway costs.",
+            "status": "pending",
+            "testStrategy": "Validate VPC creation and subnet connectivity. Test internet access from private subnets through NAT gateways. Verify security group rules with network testing tools."
+          },
+          {
+            "id": 2,
+            "title": "Set up ECS/Fargate cluster with load balancing",
+            "description": "Create ECS cluster with Fargate capacity providers, configure Application Load Balancer with target groups, and establish service discovery for inter-service communication",
+            "dependencies": [
+              1
+            ],
+            "details": "Create ECS cluster with Fargate capacity providers and container insights enabled. Configure ALB with HTTPS listeners, SSL certificates, and target groups for different services. Set up ECS service discovery with Route53 private DNS for internal service communication. Configure health checks and auto-scaling policies.",
+            "status": "pending",
+            "testStrategy": "Deploy test containers to verify ECS cluster functionality. Test load balancer health checks and routing. Validate service discovery resolution between services."
+          },
+          {
+            "id": 3,
+            "title": "Create ECR repositories and Docker configurations",
+            "description": "Set up Amazon ECR repositories for each service, create base Docker configurations, and establish image versioning and security scanning policies",
+            "dependencies": [],
+            "details": "Create ECR repositories for ingress, ASR gateway, TTS, RAG, and LLM services. Configure repository policies for cross-account access if needed. Create base Dockerfile templates with multi-stage builds for Node.js and Go services. Enable image scanning for vulnerabilities and configure lifecycle policies for image cleanup.",
+            "status": "pending",
+            "testStrategy": "Test Docker image builds and pushes to ECR. Verify image scanning functionality and vulnerability detection. Test image pulling from ECS tasks."
+          },
+          {
+            "id": 4,
+            "title": "Implement CI/CD pipeline with GitHub Actions",
+            "description": "Create GitHub Actions workflows for automated testing, building, and deployment of services to ECS with proper environment promotion",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Set up GitHub Actions workflows for each service with build, test, and deploy stages. Configure AWS IAM roles for OIDC authentication from GitHub. Implement automated ECS service updates with blue-green deployment strategy. Create environment-specific deployment workflows for dev/staging/prod with approval gates for production.",
+            "status": "pending",
+            "testStrategy": "Test complete CI/CD pipeline with dummy service deployments. Verify automated rollbacks on deployment failures. Test environment promotion workflows with proper approvals."
+          },
+          {
+            "id": 5,
+            "title": "Configure environment-specific deployments",
+            "description": "Set up separate dev, staging, and production environments with proper resource isolation, scaling configurations, and environment-specific variables",
+            "dependencies": [
+              2,
+              4
+            ],
+            "details": "Create separate ECS services and task definitions for each environment with appropriate CPU/memory allocation. Configure environment-specific ALB target groups and Route53 records. Set up Parameter Store or Secrets Manager for environment variables and secrets. Configure auto-scaling policies based on environment requirements (dev: minimal, prod: high availability).",
+            "status": "pending",
+            "testStrategy": "Deploy services to all environments and verify isolation. Test environment-specific configurations and scaling behavior. Validate secret management and environment variable injection."
+          },
+          {
+            "id": 6,
+            "title": "Establish IAM roles and security policies",
+            "description": "Create least-privilege IAM roles for ECS tasks, CI/CD processes, and cross-service communication with comprehensive security policies and access logging",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Create IAM roles for ECS task execution and tasks with minimal required permissions. Set up service-specific roles for accessing ECR, CloudWatch, Parameter Store, and RDS. Configure cross-service authentication policies. Enable CloudTrail for audit logging and set up IAM access analyzer. Create emergency access procedures and rotation policies for long-term credentials.",
+            "status": "pending",
+            "testStrategy": "Test service deployments with IAM roles to verify proper permissions. Conduct permission boundary testing to ensure least privilege. Validate CloudTrail logging and access patterns."
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Implement Aurora Postgres database with pgvector extension",
+        "description": "Set up Aurora Postgres cluster with pgvector extension for embeddings storage and configure database schema for users, sessions, and knowledge index",
+        "details": "Create Aurora Postgres cluster with pgvector extension enabled. Design and implement database schema including: users table (device tokens), sessions table (short-term memory), knowledge_documents table, embeddings table with vector columns, and logs table. Configure connection pooling with RDS Proxy. Set up database migrations system. Implement backup and restore procedures with 24-hour TTL for logs.",
+        "testStrategy": "Test database connectivity and pgvector functionality. Validate schema with sample data inserts. Test vector similarity searches. Verify TTL cleanup jobs work correctly. Load test with expected concurrent connections.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Set up Aurora Postgres cluster with pgvector extension",
+            "description": "Create and configure Aurora Postgres cluster with pgvector extension enabled for vector embeddings storage",
+            "dependencies": [],
+            "details": "Create Aurora Postgres cluster in AWS with pgvector extension installed and enabled. Configure cluster parameters for optimal vector search performance. Set up appropriate instance sizes and storage configurations. Enable encryption at rest and in transit. Configure VPC security groups and subnet groups for secure access. Test pgvector functionality with sample vector operations.",
+            "status": "pending",
+            "testStrategy": "Verify cluster creation and pgvector extension availability. Test basic vector operations and indexing. Validate security group configurations and connectivity."
+          },
+          {
+            "id": 2,
+            "title": "Design and implement database schema for users, sessions, and knowledge index",
+            "description": "Create comprehensive database schema including users, sessions, knowledge documents, embeddings, and logs tables",
+            "dependencies": [
+              1
+            ],
+            "details": "Design and implement schema tables: users (id, device_token, created_at), sessions (id, user_id, context_data, expires_at), knowledge_documents (id, source_url, content, metadata, created_at), embeddings (id, document_id, vector, chunk_text, embedding_model), logs (id, session_id, request_data, response_data, created_at, expires_at). Add appropriate indexes including vector indexes for pgvector. Implement foreign key constraints and data validation rules.",
+            "status": "pending",
+            "testStrategy": "Validate schema creation and constraints. Test sample data insertion across all tables. Verify vector column functionality and indexing performance."
+          },
+          {
+            "id": 3,
+            "title": "Configure RDS Proxy and connection pooling",
+            "description": "Set up RDS Proxy for connection pooling and configure optimal database connection management",
+            "dependencies": [
+              2
+            ],
+            "details": "Configure RDS Proxy to manage database connections efficiently. Set up connection pooling parameters for optimal performance under concurrent load. Configure authentication using IAM roles and secrets management. Set up target groups and health checks. Configure proxy settings for session pinning when needed for pgvector operations. Implement connection retry logic and failover configurations.",
+            "status": "pending",
+            "testStrategy": "Test connection pooling under various load scenarios. Verify authentication and authorization through RDS Proxy. Test failover and retry mechanisms."
+          },
+          {
+            "id": 4,
+            "title": "Implement database migration system",
+            "description": "Create database migration framework for schema versioning and automated deployments",
+            "dependencies": [
+              2
+            ],
+            "details": "Implement migration system using tools like Flyway or custom solution for schema version control. Create initial migration files for all tables and indexes. Set up automated migration execution in CI/CD pipeline. Implement rollback capabilities for failed migrations. Create migration validation and testing procedures. Document migration best practices and procedures for future schema changes.",
+            "status": "pending",
+            "testStrategy": "Test migration execution and rollback scenarios. Validate migration versioning and dependency handling. Test automated deployment integration."
+          },
+          {
+            "id": 5,
+            "title": "Implement backup, restore procedures and TTL cleanup jobs",
+            "description": "Set up automated backup/restore procedures and implement TTL cleanup for logs table",
+            "dependencies": [
+              2
+            ],
+            "details": "Configure automated daily backups with point-in-time recovery capability. Implement backup retention policies and cross-region replication if needed. Create restore procedures and documentation. Implement TTL cleanup job for logs table (24-hour retention) using scheduled Lambda function or database stored procedure. Set up monitoring and alerting for backup success/failure. Create disaster recovery runbooks and test procedures.",
+            "status": "pending",
+            "testStrategy": "Test backup creation and restore procedures. Verify TTL cleanup job execution and accuracy. Test disaster recovery scenarios and data integrity validation."
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Build ingress service for audio streaming and session management",
+        "description": "Create the main ingress service that handles WebRTC audio streaming, gRPC control messages, and session lifecycle management",
+        "details": "Implement Node.js/Go service with WebRTC media server capabilities using libraries like mediasoup or Pion. Handle audio chunk reception via WebRTC data channels. Implement gRPC/HTTP2 endpoints for session control (start, stop, status). Manage session state and routing to downstream services. Implement authentication with device tokens. Add request/response logging with structured JSON format. Configure auto-scaling based on concurrent sessions (target: 10 users).",
+        "testStrategy": "Unit tests for session management logic. Integration tests with mock WebRTC clients. Load testing with simulated concurrent sessions. Verify audio streaming latency measurements. Test authentication flows.",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Set up WebRTC media server with mediasoup/Pion",
+            "description": "Initialize and configure WebRTC media server infrastructure using mediasoup for Node.js or Pion for Go to handle real-time audio streaming capabilities",
+            "dependencies": [],
+            "details": "Install and configure mediasoup or Pion WebRTC library. Set up media server workers and routers. Configure audio codecs (Opus preferred). Implement peer connection management and SDP offer/answer handling. Set up ICE candidate gathering and STUN/TURN server integration for NAT traversal. Configure media server scaling and resource management.",
+            "status": "pending",
+            "testStrategy": "Unit tests for media server initialization and configuration. Integration tests with WebRTC test clients. Verify audio codec negotiation and peer connection establishment."
+          },
+          {
+            "id": 2,
+            "title": "Implement audio chunk reception via WebRTC data channels",
+            "description": "Build the audio data reception pipeline that captures streaming audio chunks from WebRTC clients and processes them for downstream services",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement WebRTC data channel setup for audio streaming. Create audio chunk buffering and processing pipeline. Handle audio format conversion and validation (16kHz, mono, 16-bit PCM). Implement audio frame synchronization and timestamp management. Add audio quality monitoring and packet loss detection. Create audio stream routing to ASR services.",
+            "status": "pending",
+            "testStrategy": "Test audio chunk reception with various client implementations. Validate audio format conversion accuracy. Test packet loss handling and audio quality metrics."
+          },
+          {
+            "id": 3,
+            "title": "Develop gRPC and HTTP2 endpoints for session control",
+            "description": "Create the control plane API endpoints using gRPC and HTTP2 for session management operations including start, stop, status, and configuration",
+            "dependencies": [],
+            "details": "Define gRPC protobuf schemas for session control messages. Implement session start/stop/status endpoints. Create HTTP2 REST API for backward compatibility. Add request validation and error handling. Implement session configuration endpoints (audio settings, voice parameters). Add health check and metrics endpoints. Configure TLS termination and certificate management.",
+            "status": "pending",
+            "testStrategy": "Unit tests for all API endpoints and message validation. Integration tests with gRPC and HTTP2 clients. Test TLS configuration and certificate handling."
+          },
+          {
+            "id": 4,
+            "title": "Build session state management and routing system",
+            "description": "Implement comprehensive session lifecycle management with state tracking, persistence, and intelligent routing to downstream services",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Create session state machine with pending/active/completed/error states. Implement session persistence using Redis or in-memory store. Build routing logic to direct audio streams to appropriate ASR and TTS services. Add session timeout and cleanup mechanisms. Implement session recovery and failover handling. Create session metrics and monitoring dashboards.",
+            "status": "pending",
+            "testStrategy": "Test session state transitions and persistence. Validate routing logic with mock downstream services. Test session timeout and cleanup functionality. Load test with concurrent sessions."
+          },
+          {
+            "id": 5,
+            "title": "Implement authentication system with device tokens",
+            "description": "Create secure authentication mechanism using device tokens for client verification and authorization with session-based access control",
+            "dependencies": [],
+            "details": "Implement device token generation and validation system. Create JWT-based authentication with refresh tokens. Add token storage and revocation mechanisms. Implement rate limiting per device/token. Add authentication middleware for all endpoints. Create device registration and management APIs. Implement audit logging for authentication events.",
+            "status": "pending",
+            "testStrategy": "Test token generation, validation, and revocation flows. Validate rate limiting functionality. Test authentication middleware integration. Security testing for token handling."
+          },
+          {
+            "id": 6,
+            "title": "Add structured JSON logging and monitoring",
+            "description": "Implement comprehensive logging system with structured JSON format, request/response tracking, and integration with monitoring infrastructure",
+            "dependencies": [],
+            "details": "Configure structured logging with JSON format using libraries like Winston or logrus. Add request/response logging middleware with correlation IDs. Implement log levels and filtering. Add performance metrics logging (latency, throughput). Create log aggregation and forwarding to centralized systems. Implement error tracking and alerting. Add debugging and trace logging for troubleshooting.",
+            "status": "pending",
+            "testStrategy": "Validate log format and structure. Test log correlation across service calls. Verify log aggregation and filtering. Test alerting mechanisms for critical errors."
+          },
+          {
+            "id": 7,
+            "title": "Configure auto-scaling for concurrent session management",
+            "description": "Set up auto-scaling infrastructure to handle concurrent sessions with target of 10 users, including load balancing and resource optimization",
+            "dependencies": [
+              4,
+              6
+            ],
+            "details": "Configure Kubernetes HPA or AWS Auto Scaling for horizontal scaling. Set up load balancing with session affinity for WebRTC connections. Implement resource monitoring for CPU, memory, and network usage. Configure scaling triggers based on concurrent session count and resource utilization. Add graceful shutdown handling for scaling down. Implement health checks for auto-scaling decisions.",
+            "status": "pending",
+            "testStrategy": "Load test with simulated concurrent sessions to trigger auto-scaling. Test scaling up and down scenarios. Validate session affinity and load distribution. Monitor resource utilization during scaling events."
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Integrate cloud ASR services with streaming support",
+        "description": "Implement ASR Gateway service that streams audio to cloud providers (Deepgram, Google, Azure) and returns real-time transcriptions",
+        "details": "Create ASR Gateway service with support for multiple providers: Deepgram (primary), Google Speech-to-Text, Azure Speech Services. Implement streaming audio processing with WebSocket connections to ASR providers. Handle real-time transcription results with partial and final results. Implement fallback logic between providers. Add voice activity detection integration. Configure for low-latency streaming with optimized audio encoding (16kHz, mono, 16-bit PCM). Track Word Error Rate (WER) metrics.",
+        "testStrategy": "Test streaming transcription accuracy with sample audio files. Measure and validate <500ms first-token latency. Test provider fallback scenarios. Integration tests with various audio qualities and accents. Load testing with concurrent streams.",
+        "priority": "high",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement multi-provider ASR integration (Deepgram, Google, Azure)",
+            "description": "Create ASR provider abstraction layer and implement concrete providers for Deepgram, Google Speech-to-Text, and Azure Speech Services with unified API interface",
+            "dependencies": [],
+            "details": "Implement abstract ASRProvider interface with methods for connect, stream, and disconnect. Create DeepgramProvider as primary provider with WebSocket streaming API. Implement GoogleSpeechProvider using Google Cloud Speech-to-Text streaming API. Create AzureSpeechProvider using Azure Cognitive Services Speech SDK. Configure authentication for each provider (API keys, service accounts). Implement provider-specific audio format handling and configuration parameters.",
+            "status": "pending",
+            "testStrategy": "Unit tests for each provider implementation. Mock API responses for testing. Validate authentication flows. Test audio format compatibility across providers."
+          },
+          {
+            "id": 2,
+            "title": "Implement streaming WebSocket connections to ASR providers",
+            "description": "Build WebSocket connection management for real-time audio streaming to ASR providers with connection pooling and error handling",
+            "dependencies": [
+              1
+            ],
+            "details": "Create WebSocketManager class for handling persistent connections to ASR providers. Implement connection pooling to minimize connection overhead. Add automatic reconnection logic with exponential backoff. Handle WebSocket lifecycle events (open, message, close, error). Implement audio chunk queuing and streaming with proper flow control. Add connection health monitoring and heartbeat mechanisms. Configure optimal buffer sizes for low-latency streaming.",
+            "status": "pending",
+            "testStrategy": "Test WebSocket connection stability and reconnection logic. Validate audio streaming flow control. Test connection pooling under load. Mock provider disconnections to test error handling."
+          },
+          {
+            "id": 3,
+            "title": "Handle real-time transcription results with partial and final results",
+            "description": "Implement transcription result processing pipeline that handles partial updates and final transcriptions from multiple ASR providers",
+            "dependencies": [
+              2
+            ],
+            "details": "Create TranscriptionProcessor class to handle incoming transcription events. Implement result aggregation for partial and final transcription segments. Add confidence score tracking and filtering. Implement word-level timestamp extraction where available. Create result normalization across different provider response formats. Add transcription session state management. Implement result streaming to downstream consumers via WebSocket or Server-Sent Events.",
+            "status": "pending",
+            "testStrategy": "Test partial result aggregation accuracy. Validate final result consistency. Test confidence score filtering. Verify timestamp extraction across providers. Load test with concurrent transcription streams."
+          },
+          {
+            "id": 4,
+            "title": "Implement provider fallback logic",
+            "description": "Create intelligent fallback mechanism that switches between ASR providers based on availability, performance, and quality metrics",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement ProviderManager with health monitoring for each ASR provider. Add automatic failover logic when primary provider fails or degrades. Implement quality-based switching using Word Error Rate (WER) and confidence scores. Create provider selection algorithm considering latency, accuracy, and cost. Add manual provider override capabilities for testing. Implement graceful degradation with provider priority ordering (Deepgram primary, Google secondary, Azure tertiary).",
+            "status": "pending",
+            "testStrategy": "Test failover scenarios by simulating provider outages. Validate quality-based switching with degraded audio samples. Test provider selection algorithm under various conditions. Verify graceful degradation behavior."
+          },
+          {
+            "id": 5,
+            "title": "Integrate voice activity detection with ASR streaming",
+            "description": "Implement voice activity detection to optimize audio streaming and reduce unnecessary ASR processing during silence periods",
+            "dependencies": [
+              4
+            ],
+            "details": "Integrate WebRTC VAD (Voice Activity Detection) or implement custom VAD using energy-based detection. Add audio preprocessing pipeline with silence detection. Implement smart audio buffering that accumulates audio during speech and flushes during silence. Add configuration for VAD sensitivity and silence thresholds. Implement speech onset/offset detection for optimal transcription segmentation. Create VAD metrics tracking for optimization.",
+            "status": "pending",
+            "testStrategy": "Test VAD accuracy with various audio samples and noise levels. Validate speech onset/offset detection timing. Test audio buffering and flushing behavior. Measure processing efficiency gains from VAD integration."
+          },
+          {
+            "id": 6,
+            "title": "Optimize latency and implement WER metrics tracking",
+            "description": "Implement performance monitoring and optimization for sub-500ms first-token latency with comprehensive Word Error Rate tracking",
+            "dependencies": [
+              5
+            ],
+            "details": "Implement latency monitoring at each pipeline stage (audio capture, VAD processing, ASR streaming, result processing). Configure optimal audio encoding parameters (16kHz, mono, 16-bit PCM). Add audio chunk size optimization for latency vs. accuracy balance. Implement WER calculation using reference transcriptions for quality assessment. Create performance metrics dashboard with real-time latency and accuracy tracking. Add automated performance alerts and provider quality scoring.",
+            "status": "pending",
+            "testStrategy": "Benchmark end-to-end latency with target <500ms first-token. Test WER calculation accuracy with known reference texts. Validate performance metrics collection and alerting. Load test to verify latency under concurrent sessions."
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Implement RAG service with pgvector knowledge indexing",
+        "description": "Build the retrieval-augmented generation service that indexes knowledge documents, performs semantic search, and provides grounded responses with citations",
+        "details": "Implement RAG Service with document ingestion pipeline for GitHub repositories and APIs. Use embedding models (OpenAI text-embedding-ada-002 or similar) to create vector representations. Store embeddings in pgvector with metadata including source URLs, timestamps, document chunks. Implement semantic search with similarity thresholds. Create citation injection system that appends source references to responses. Add knowledge refresh mechanism (every 3 minutes) for GitHub API data. Implement grounding validation to ensure responses are retrieval-based.",
+        "testStrategy": "Test document ingestion and embedding generation. Validate semantic search relevance with known queries. Test citation accuracy and completeness. Verify knowledge refresh automation. Integration tests with GitHub API data ingestion.",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement document ingestion pipeline for GitHub repositories",
+            "description": "Build the document ingestion system that fetches and processes content from GitHub repositories and APIs",
+            "dependencies": [],
+            "details": "Create GitHub API integration to fetch repository content including README files, documentation, code files, and issues. Implement document parsing and chunking strategies for different file types (markdown, code, text). Add rate limiting and error handling for GitHub API calls. Include metadata extraction for source URLs, timestamps, and document structure.",
+            "status": "pending",
+            "testStrategy": "Test GitHub API integration with various repository types. Validate document chunking produces appropriate sizes. Test rate limiting and error recovery scenarios."
+          },
+          {
+            "id": 2,
+            "title": "Implement embedding generation and pgvector storage",
+            "description": "Create the embedding pipeline that generates vector representations and stores them in pgvector database",
+            "dependencies": [
+              1
+            ],
+            "details": "Integrate OpenAI text-embedding-ada-002 or similar embedding model. Implement batch processing for efficient embedding generation. Create pgvector database schema with vector columns, metadata fields, and indexes. Add embedding storage with proper vector similarity index configuration for fast retrieval.",
+            "status": "pending",
+            "testStrategy": "Test embedding generation with sample documents. Validate vector storage and retrieval performance. Test similarity search accuracy with known document pairs."
+          },
+          {
+            "id": 3,
+            "title": "Build semantic search implementation with similarity thresholds",
+            "description": "Develop the semantic search engine that finds relevant documents using vector similarity",
+            "dependencies": [
+              2
+            ],
+            "details": "Implement cosine similarity search using pgvector operations. Add configurable similarity thresholds for relevance filtering. Create query preprocessing and embedding generation for search terms. Implement ranking algorithms that combine vector similarity with metadata relevance.",
+            "status": "pending",
+            "testStrategy": "Test search relevance with known queries and expected results. Validate similarity threshold effectiveness. Benchmark search performance with large document collections."
+          },
+          {
+            "id": 4,
+            "title": "Create citation injection system for source references",
+            "description": "Build the citation system that appends source references to generated responses",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement citation formatting that includes source URLs, document titles, and timestamps. Create citation injection logic that appends relevant sources to LLM responses. Add citation deduplication and ranking by relevance. Ensure citations are properly formatted and linked to retrieved documents.",
+            "status": "pending",
+            "testStrategy": "Test citation accuracy and completeness with sample responses. Validate citation formatting and URL accessibility. Test deduplication logic with overlapping sources."
+          },
+          {
+            "id": 5,
+            "title": "Implement knowledge refresh automation mechanism",
+            "description": "Build automated system that refreshes knowledge base every 3 minutes with latest GitHub data",
+            "dependencies": [
+              2
+            ],
+            "details": "Create scheduled job system that runs every 3 minutes to check for GitHub repository updates. Implement incremental updates that only process changed documents. Add conflict resolution for concurrent updates. Include monitoring and logging for refresh operations with failure recovery mechanisms.",
+            "status": "pending",
+            "testStrategy": "Test refresh automation with mock GitHub updates. Validate incremental update logic. Test failure recovery and monitoring alerts."
+          },
+          {
+            "id": 6,
+            "title": "Implement grounding validation for retrieval-based responses",
+            "description": "Build validation system that ensures responses are properly grounded in retrieved knowledge",
+            "dependencies": [
+              4
+            ],
+            "details": "Create grounding validation logic that checks if LLM responses are supported by retrieved documents. Implement confidence scoring based on document relevance and coverage. Add fallback mechanisms for insufficient grounding. Include response quality metrics and validation reporting.",
+            "status": "pending",
+            "testStrategy": "Test grounding validation with known factual and unfactual responses. Validate confidence scoring accuracy. Test fallback mechanisms with edge cases."
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Build LLM router with managed frontier model integration",
+        "description": "Create LLM Router service that interfaces with managed frontier models (GPT-4o, Claude, Gemini) and enforces retrieval-only responses for critical intents",
+        "details": "Implement LLM Router with API integrations for OpenAI GPT-4o, Anthropic Claude, and Google Gemini. Implement streaming response handling for progressive token delivery. Design system prompts that enforce retrieval-only answers for critical intents while allowing casual dialogue. Add intent classification to determine response mode. Implement hybrid planning layer with predefined 2-step workflows (retrieve → summarize). Add hard caps: 2 steps max, 10 seconds timeout per query. Include fallback logic between model providers.",
+        "testStrategy": "Test streaming responses with <500ms first token latency. Validate intent classification accuracy. Test retrieval enforcement vs casual mode switching. Verify timeout and step limits work correctly. Load testing with concurrent LLM requests.",
+        "priority": "high",
+        "dependencies": [
+          5
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement multi-provider LLM API integrations",
+            "description": "Create API clients and adapters for OpenAI GPT-4o, Anthropic Claude, and Google Gemini with unified interface abstraction",
+            "dependencies": [],
+            "details": "Build API client implementations for each LLM provider with proper authentication, request formatting, and response parsing. Create a unified LLMProvider interface that abstracts provider-specific details. Implement proper error handling, rate limiting awareness, and request/response logging. Include configuration management for API keys and model selection per provider.",
+            "status": "pending",
+            "testStrategy": "Unit tests for each provider client. Integration tests with actual API endpoints. Mock tests for error scenarios and rate limiting."
+          },
+          {
+            "id": 2,
+            "title": "Build streaming response handling system",
+            "description": "Implement streaming response architecture for progressive token delivery from LLM providers with backpressure handling",
+            "dependencies": [
+              1
+            ],
+            "details": "Create streaming response handlers that can process Server-Sent Events or WebSocket streams from different LLM providers. Implement backpressure handling to manage client consumption rates. Add buffering and chunking logic for optimal delivery. Include stream interruption and cleanup mechanisms for cancelled requests.",
+            "status": "pending",
+            "testStrategy": "Test streaming latency and first token delivery times. Validate backpressure handling under slow client scenarios. Test stream interruption and resource cleanup."
+          },
+          {
+            "id": 3,
+            "title": "Develop system prompt engineering and intent classification",
+            "description": "Create system prompts for retrieval-only enforcement and build intent classification to determine response modes",
+            "dependencies": [],
+            "details": "Design system prompts that enforce retrieval-only answers for critical intents while allowing casual dialogue for non-critical queries. Implement intent classification using keyword matching, pattern recognition, or lightweight ML models. Create prompt templates for different response modes. Add confidence scoring for intent classification decisions.",
+            "status": "pending",
+            "testStrategy": "Test intent classification accuracy with labeled dataset. Validate prompt effectiveness in enforcing retrieval-only responses. A/B testing of different prompt strategies."
+          },
+          {
+            "id": 4,
+            "title": "Implement retrieval enforcement logic",
+            "description": "Build system to enforce retrieval-only responses for critical intents with validation and fallback mechanisms",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement logic that validates LLM responses against retrieval requirements for critical intents. Add response filtering to block non-grounded answers. Create fallback mechanisms when retrieval data is insufficient. Include response validation scoring and automatic retry logic with modified prompts when enforcement fails.",
+            "status": "pending",
+            "testStrategy": "Test enforcement accuracy with various query types. Validate fallback mechanisms trigger correctly. Measure false positive/negative rates for response filtering."
+          },
+          {
+            "id": 5,
+            "title": "Build hybrid planning layer with workflow orchestration",
+            "description": "Create planning layer that orchestrates predefined 2-step workflows with retrieve-then-summarize patterns",
+            "dependencies": [
+              3,
+              4
+            ],
+            "details": "Implement workflow orchestration engine that manages 2-step processes: retrieve relevant information, then summarize/synthesize responses. Create workflow templates for different query types. Add step tracking and state management. Implement decision logic for when to use planning vs direct response modes.",
+            "status": "pending",
+            "testStrategy": "Test workflow execution with various query scenarios. Validate step transitions and state management. Measure workflow completion times and success rates."
+          },
+          {
+            "id": 6,
+            "title": "Add timeout and step limit controls",
+            "description": "Implement hard timeout controls (10 seconds per query) and step limits (2 steps max) with graceful degradation",
+            "dependencies": [
+              5
+            ],
+            "details": "Create timeout management system that enforces 10-second maximum per query. Implement step counting and 2-step maximum enforcement. Add graceful degradation when limits are reached - return partial results or fallback responses. Include timeout prediction and early termination logic to prevent resource waste.",
+            "status": "pending",
+            "testStrategy": "Test timeout enforcement accuracy. Validate step limit controls prevent runaway processes. Test graceful degradation scenarios and partial result quality."
+          },
+          {
+            "id": 7,
+            "title": "Implement provider fallback mechanisms",
+            "description": "Build intelligent fallback system between LLM providers with health monitoring and automatic switching",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Create provider health monitoring that tracks response times, error rates, and availability. Implement automatic fallback logic that switches to backup providers when primary fails. Add provider ranking based on performance metrics and query types. Include circuit breaker patterns to avoid cascading failures and provider recovery detection.",
+            "status": "pending",
+            "testStrategy": "Test fallback triggers with simulated provider failures. Validate provider health monitoring accuracy. Test recovery detection and automatic failback to preferred providers."
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Integrate cloud TTS services for neural voice synthesis",
+        "description": "Implement TTS Service that converts LLM responses to high-quality speech audio and streams back to clients with minimal latency",
+        "details": "Create TTS Service with support for cloud neural TTS: Google Cloud Text-to-Speech, Azure Neural TTS, Amazon Polly. Implement streaming audio synthesis with chunked delivery. Configure voice selection and speed settings. Add audio format optimization for mobile delivery (compressed, low-latency). Implement audio caching for common responses. Add voice interruption handling - ability to stop audio generation when user begins speaking. Support adjustable playback rates for accessibility.",
+        "testStrategy": "Test audio quality and naturalness of generated speech. Measure end-to-end audio latency from text to playback. Test interruption and resume functionality. Validate audio streaming on different network conditions. Load testing with concurrent TTS requests.",
+        "priority": "medium",
+        "dependencies": [
+          6
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement multi-provider TTS client integration",
+            "description": "Create unified TTS client wrapper supporting Google Cloud Text-to-Speech, Azure Neural TTS, and Amazon Polly with configurable voice selection and provider fallback logic",
+            "dependencies": [],
+            "details": "Build TTS client abstraction layer with unified interface for Google Cloud TTS, Azure Cognitive Services Speech, and Amazon Polly. Implement provider-specific configuration for voice models, language codes, and audio formats. Add provider fallback mechanism with health checks and retry logic. Configure authentication for each service (service accounts, API keys). Implement voice mapping system to normalize voice options across providers.",
+            "status": "pending",
+            "testStrategy": "Unit tests for each provider client. Integration tests with actual cloud services. Test provider fallback scenarios and error handling. Validate voice selection consistency across providers."
+          },
+          {
+            "id": 2,
+            "title": "Build streaming audio synthesis pipeline",
+            "description": "Implement real-time audio streaming with chunked text processing and audio delivery for minimal latency TTS synthesis",
+            "dependencies": [
+              1
+            ],
+            "details": "Create streaming TTS pipeline that processes text chunks in real-time and streams audio back immediately. Implement text segmentation for optimal chunk sizes (sentence boundaries, punctuation breaks). Build audio streaming buffer with WebSocket/HTTP2 support. Add audio format conversion and encoding for web delivery (MP3, WebM, OGG). Implement concurrent synthesis for multiple text chunks to reduce total latency.",
+            "status": "pending",
+            "testStrategy": "Test streaming latency measurements from text input to first audio chunk. Validate audio continuity across chunk boundaries. Test concurrent synthesis performance. Measure end-to-end synthesis time for various text lengths."
+          },
+          {
+            "id": 3,
+            "title": "Implement audio optimization and caching system",
+            "description": "Create audio format optimization for mobile delivery and intelligent caching system for frequently requested content",
+            "dependencies": [
+              2
+            ],
+            "details": "Build audio compression and optimization pipeline for mobile-first delivery with adaptive bitrate encoding. Implement Redis-based caching system with TTL for common phrases and responses. Add cache key generation based on text content, voice settings, and provider. Create audio format negotiation based on client capabilities (Accept headers). Implement cache warming for frequently used system prompts and common responses.",
+            "status": "pending",
+            "testStrategy": "Test audio quality across different compression levels. Validate cache hit rates and performance improvements. Test mobile audio playback on various devices. Measure cache storage efficiency and eviction policies."
+          },
+          {
+            "id": 4,
+            "title": "Build voice interruption and cancellation handling",
+            "description": "Implement real-time audio generation cancellation when user begins speaking with cleanup of in-flight synthesis requests",
+            "dependencies": [
+              2
+            ],
+            "details": "Create interruption detection system that monitors for user voice input during TTS playback. Implement immediate cancellation of ongoing TTS synthesis requests across all providers. Build cleanup mechanism for partially generated audio buffers and streaming connections. Add WebSocket signaling for real-time interruption events from client. Implement graceful degradation when cancellation fails or is delayed.",
+            "status": "pending",
+            "testStrategy": "Test interruption responsiveness and cleanup effectiveness. Validate no audio artifacts after cancellation. Test concurrent synthesis interruption scenarios. Measure interruption latency from detection to silence."
+          },
+          {
+            "id": 5,
+            "title": "Add accessibility features and performance testing",
+            "description": "Implement adjustable playback rates, accessibility compliance, and comprehensive performance testing suite for TTS service",
+            "dependencies": [
+              3,
+              4
+            ],
+            "details": "Add adjustable playback rate controls (0.5x to 2x speed) with pitch preservation. Implement accessibility features including SSML support for pronunciation control and pause insertion. Create comprehensive performance testing suite measuring latency, throughput, and quality metrics. Add voice quality assessment tools and automated regression testing. Implement performance monitoring and alerting for TTS service health.",
+            "status": "pending",
+            "testStrategy": "Test playback rate accuracy and audio quality preservation. Validate SSML processing and pronunciation controls. Load testing with concurrent TTS requests. Accessibility compliance testing with screen readers and assistive technologies."
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Develop iOS client app with wake-word detection and VAD",
+        "description": "Build native iOS application with wake-word detection (\"Jarvis\"), voice activity detection, WebRTC audio streaming, and real-time UI",
+        "details": "Create native iOS app using Swift and UIKit/SwiftUI. Integrate wake-word detection using on-device speech recognition or custom models. Implement client-side Voice Activity Detection (VAD) using WebRTC-VAD or RNNoise for <150ms barge-in reaction time. Build WebRTC client for audio streaming to backend. Implement gRPC client for control messages. Design minimal UI: waveform visualization, microphone button, real-time transcript display, sources button for citations. Add audio session management for background operation. Implement device token authentication.",
+        "testStrategy": "Test wake-word accuracy and false positive rates. Measure VAD reaction times (<150ms requirement). Test WebRTC audio streaming quality and latency. Validate UI responsiveness during real-time interactions. Test app backgrounding and audio session handling.",
+        "priority": "high",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Setup iOS project and architecture foundation",
+            "description": "Create new iOS project with proper architecture, dependencies, and project structure for voice assistant app",
+            "dependencies": [],
+            "details": "Create new Xcode project using Swift with minimum iOS 15 target. Set up project structure with MVVM architecture. Configure Swift Package Manager dependencies for WebRTC, gRPC, and audio processing libraries. Create core app architecture with service layers for audio management, networking, and UI coordination. Set up proper logging and error handling frameworks.",
+            "status": "pending",
+            "testStrategy": "Verify project builds successfully and all dependencies are properly integrated. Test basic app launch and navigation structure."
+          },
+          {
+            "id": 2,
+            "title": "Implement wake-word detection system",
+            "description": "Integrate on-device wake-word detection to trigger voice assistant with 'Jarvis' keyword",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement wake-word detection using Speech framework's SFSpeechRecognizer for on-device processing. Configure continuous listening mode with low-power consumption. Set up audio buffer management for wake-word analysis. Implement confidence thresholds and false positive filtering. Add wake-word sensitivity settings and user configuration options.",
+            "status": "pending",
+            "testStrategy": "Test wake-word accuracy with various pronunciations and background noise levels. Measure false positive rates and power consumption during continuous listening."
+          },
+          {
+            "id": 3,
+            "title": "Develop Voice Activity Detection with <150ms latency",
+            "description": "Implement real-time VAD system for immediate barge-in detection with sub-150ms response time",
+            "dependencies": [
+              1
+            ],
+            "details": "Integrate WebRTC-VAD or implement RNNoise-based VAD for real-time voice activity detection. Configure audio buffer processing with 20ms chunks for low-latency detection. Implement energy-based and spectral analysis for voice detection. Set up callback system for immediate barge-in handling. Optimize processing pipeline to achieve <150ms detection latency.",
+            "status": "pending",
+            "testStrategy": "Measure VAD reaction times under various conditions to ensure <150ms requirement. Test voice detection accuracy and sensitivity to background noise."
+          },
+          {
+            "id": 4,
+            "title": "Build WebRTC client for audio streaming",
+            "description": "Implement WebRTC client to stream audio data to backend ingress service in real-time",
+            "dependencies": [
+              1,
+              3
+            ],
+            "details": "Integrate WebRTC framework for iOS to establish peer connections with backend. Configure audio codec settings (Opus) and bitrate optimization. Implement audio capture and streaming pipeline with proper buffer management. Set up WebRTC data channels for control messages. Add connection state management and automatic reconnection logic.",
+            "status": "pending",
+            "testStrategy": "Test audio streaming quality and latency with backend service. Verify connection stability and reconnection handling under network interruptions."
+          },
+          {
+            "id": 5,
+            "title": "Implement gRPC client for control messages",
+            "description": "Create gRPC client to handle session control and device authentication with backend services",
+            "dependencies": [
+              1
+            ],
+            "details": "Integrate gRPC Swift framework and generate client stubs from service definitions. Implement session management calls (start, stop, status) with proper error handling. Set up device token authentication and refresh mechanisms. Configure connection pooling and timeout settings. Add retry logic and circuit breaker patterns for reliability.",
+            "status": "pending",
+            "testStrategy": "Test gRPC communication with backend services. Verify authentication flows and session management operations. Test error handling and retry mechanisms."
+          },
+          {
+            "id": 6,
+            "title": "Create UI components for real-time interaction",
+            "description": "Build responsive UI with waveform visualization, microphone controls, transcript display, and sources button",
+            "dependencies": [
+              1,
+              2,
+              3
+            ],
+            "details": "Design and implement SwiftUI components for waveform visualization using real-time audio data. Create microphone button with visual feedback states. Build scrolling transcript view with real-time text updates. Implement sources button and citation display modal. Add responsive animations and state transitions for seamless user experience.",
+            "status": "pending",
+            "testStrategy": "Test UI responsiveness during real-time audio processing. Verify waveform accuracy and transcript display performance. Test accessibility features and device rotation handling."
+          },
+          {
+            "id": 7,
+            "title": "Configure audio session management",
+            "description": "Implement comprehensive audio session handling for background operation and proper audio routing",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "details": "Configure AVAudioSession for simultaneous recording and playback with proper category settings. Implement background audio processing capabilities with background app refresh. Set up audio interruption handling (calls, notifications, other apps). Configure audio routing for various output devices (speakers, headphones, AirPods). Add proper cleanup and session deactivation on app termination.",
+            "status": "pending",
+            "testStrategy": "Test audio session handling during interruptions and background operation. Verify proper audio routing and session restoration after interruptions."
+          },
+          {
+            "id": 8,
+            "title": "Implement device authentication system",
+            "description": "Set up secure device token authentication and registration with backend services",
+            "dependencies": [
+              1,
+              5
+            ],
+            "details": "Implement device registration flow with unique device identifier generation. Set up secure token storage using iOS Keychain services. Create authentication middleware for all API calls with automatic token refresh. Implement device deregistration and token revocation flows. Add biometric authentication option for additional security.",
+            "status": "pending",
+            "testStrategy": "Test device registration and authentication flows. Verify token security and storage mechanisms. Test authentication persistence across app launches and device restarts."
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Implement real-time coordination and streaming orchestration",
+        "description": "Build the coordination layer that manages real-time data flow between all services and ensures <500ms end-to-end latency",
+        "details": "Implement service orchestration layer that coordinates: iOS client → Ingress → ASR → LLM → RAG → TTS → client pipeline. Add real-time state management for streaming responses. Implement progressive response delivery (streaming partials). Add session context management for natural follow-ups. Build interruption handling system that can cancel in-flight requests when user starts speaking. Add latency monitoring and optimization throughout the pipeline. Implement graceful degradation for service failures.",
+        "testStrategy": "End-to-end latency testing with target <500ms first token. Test interruption scenarios and recovery. Validate streaming response quality. Stress testing with concurrent user sessions. Monitor service coordination under load.",
+        "priority": "high",
+        "dependencies": [
+          4,
+          6,
+          7,
+          8
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design and implement service orchestration architecture",
+            "description": "Create the core orchestration layer that coordinates the iOS client → Ingress → ASR → LLM → RAG → TTS → client pipeline with proper service discovery and routing",
+            "dependencies": [],
+            "details": "Implement a central orchestration service that manages the flow between all pipeline components. Design service registry and discovery mechanism. Create routing logic for request flow. Implement service health checks and load balancing. Design API contracts between services. Set up inter-service communication protocols (gRPC/WebSocket). Create pipeline state tracking system.",
+            "status": "pending",
+            "testStrategy": "Unit tests for orchestration logic. Integration tests for service routing. Test service discovery and health check mechanisms. Validate API contract compliance across services."
+          },
+          {
+            "id": 2,
+            "title": "Implement real-time state management system",
+            "description": "Build state management for tracking active sessions, streaming responses, and maintaining context across the entire pipeline",
+            "dependencies": [
+              1
+            ],
+            "details": "Create session state store with Redis or in-memory cache. Implement real-time state synchronization across services. Build session lifecycle management (creation, updates, cleanup). Add state persistence for recovery scenarios. Implement state broadcasting for multi-service coordination. Create state validation and consistency checks.",
+            "status": "pending",
+            "testStrategy": "Test state consistency across services. Validate session lifecycle management. Test state recovery after service restarts. Load test with concurrent sessions and state updates."
+          },
+          {
+            "id": 3,
+            "title": "Build progressive response delivery system",
+            "description": "Implement streaming partial responses that deliver content progressively to maintain low perceived latency while processing continues",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement streaming response chunking for partial results. Create buffer management for smooth delivery. Build response aggregation and streaming protocols. Implement WebSocket streaming to client. Add response quality validation before streaming. Create progressive enhancement system that improves responses as more data becomes available.",
+            "status": "pending",
+            "testStrategy": "Test streaming response quality and consistency. Validate partial response accuracy. Measure streaming latency and throughput. Test buffer management under various load conditions."
+          },
+          {
+            "id": 4,
+            "title": "Implement session context management",
+            "description": "Build context management system that maintains conversation history and enables natural follow-up interactions across sessions",
+            "dependencies": [
+              2
+            ],
+            "details": "Create conversation context storage and retrieval system. Implement context window management for LLM interactions. Build context summarization for long conversations. Add context injection into RAG queries. Implement context-aware response generation. Create context expiration and cleanup mechanisms. Build context sharing across multiple turns.",
+            "status": "pending",
+            "testStrategy": "Test context accuracy across conversation turns. Validate context window management. Test context summarization quality. Integration tests with RAG service for context-aware retrieval."
+          },
+          {
+            "id": 5,
+            "title": "Build interruption handling system",
+            "description": "Implement system to detect user interruptions and cancel in-flight requests across the entire pipeline when user starts speaking",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement interrupt signal detection from VAD. Create request cancellation propagation across all services. Build graceful request termination without data corruption. Implement interrupt recovery and state cleanup. Add interrupt prioritization system. Create interrupt acknowledgment and feedback mechanisms. Build interrupt analytics and monitoring.",
+            "status": "pending",
+            "testStrategy": "Test interrupt detection accuracy and speed. Validate request cancellation across all services. Test state cleanup after interruptions. Measure interrupt reaction time (<150ms requirement)."
+          },
+          {
+            "id": 6,
+            "title": "Implement latency monitoring and optimization",
+            "description": "Build comprehensive latency monitoring throughout the pipeline and implement optimization strategies to achieve <500ms end-to-end latency",
+            "dependencies": [
+              1
+            ],
+            "details": "Create distributed tracing system across all services. Implement latency measurement at each pipeline stage. Build performance dashboards and alerting. Add bottleneck identification and analysis. Implement automatic optimization triggers. Create latency budget allocation per service. Build performance regression detection and alerting system.",
+            "status": "pending",
+            "testStrategy": "Test latency measurement accuracy across services. Validate end-to-end latency tracking. Test performance alerting and threshold detection. Load testing to identify bottlenecks and optimization opportunities."
+          },
+          {
+            "id": 7,
+            "title": "Implement graceful degradation system",
+            "description": "Build fault tolerance and graceful degradation mechanisms that maintain functionality when services fail or perform poorly",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement service health monitoring and circuit breakers. Create fallback mechanisms for each service component. Build degraded mode operations (e.g., cached responses, simplified processing). Implement service retry logic with exponential backoff. Create graceful error messaging to users. Build service isolation to prevent cascade failures.",
+            "status": "pending",
+            "testStrategy": "Test circuit breaker functionality and recovery. Validate fallback mechanisms for each service. Test degraded mode operations. Simulate service failures and measure recovery time and user experience."
+          },
+          {
+            "id": 8,
+            "title": "Conduct end-to-end performance testing",
+            "description": "Execute comprehensive performance testing to validate <500ms latency requirements and overall system coordination under realistic load conditions",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "details": "Create end-to-end test scenarios simulating real user interactions. Implement load testing with concurrent users and sessions. Build latency measurement and validation framework. Create performance regression test suite. Implement stress testing for service coordination limits. Build performance reporting and analysis tools. Create production-like testing environment.",
+            "status": "pending",
+            "testStrategy": "End-to-end latency validation with <500ms target. Load testing with increasing concurrent users. Stress testing to find system breaking points. Performance regression testing for each deployment. Integration testing across all pipeline components."
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Add monitoring, analytics, and basic admin configuration",
+        "description": "Implement observability stack, usage analytics, and basic admin panel for configuration and monitoring",
+        "details": "Set up monitoring with CloudWatch/Prometheus for: latency metrics (p50/p95), Word Error Rate, grounding success rate, service health. Implement structured logging for request/response tracking. Build basic admin configuration panel for: API keys management, knowledge source configuration, system settings. Add usage analytics dashboard showing: session counts, query patterns, performance metrics. Implement alerting for SLA violations (latency, uptime). Create runbooks for common operational tasks and troubleshooting.",
+        "testStrategy": "Validate metrics collection accuracy and dashboard functionality. Test alerting thresholds and notification delivery. Verify admin panel security and functionality. Load testing to ensure monitoring doesn't impact performance.",
+        "priority": "medium",
+        "dependencies": [
+          9
+        ],
+        "status": "pending",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Set up monitoring stack with CloudWatch/Prometheus",
+            "description": "Implement comprehensive monitoring infrastructure using CloudWatch or Prometheus to track system metrics and performance indicators",
+            "dependencies": [],
+            "details": "Deploy and configure CloudWatch/Prometheus monitoring stack. Set up metric collection for latency metrics (p50/p95), Word Error Rate, grounding success rate, and service health indicators. Configure metric retention policies and data aggregation rules. Implement custom metrics for business KPIs and technical performance indicators.",
+            "status": "pending",
+            "testStrategy": "Validate metric collection accuracy and retention. Test metric aggregation and query performance. Verify monitoring stack availability and failover capabilities."
+          },
+          {
+            "id": 2,
+            "title": "Implement structured logging for request/response tracking",
+            "description": "Build comprehensive structured logging system to track all request/response flows through the system pipeline",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement structured logging framework with consistent log format across all services. Add request tracing IDs for end-to-end tracking through ASR → LLM → RAG → TTS pipeline. Configure log aggregation and indexing for searchability. Set up log retention policies with 24-hour TTL for sensitive data and longer retention for operational logs.",
+            "status": "pending",
+            "testStrategy": "Test log format consistency and trace ID propagation. Validate log aggregation and search functionality. Verify retention policies and data cleanup automation."
+          },
+          {
+            "id": 3,
+            "title": "Build admin configuration panel",
+            "description": "Develop secure admin panel for managing API keys, knowledge sources, and system configuration settings",
+            "dependencies": [
+              1
+            ],
+            "details": "Create web-based admin interface with authentication and authorization. Implement API key management with generation, rotation, and revocation capabilities. Add knowledge source configuration for GitHub repositories and API endpoints. Build system settings management for service parameters, feature flags, and operational controls. Include audit logging for all administrative actions.",
+            "status": "pending",
+            "testStrategy": "Test admin panel security and access controls. Validate API key lifecycle management. Verify configuration changes propagate correctly to services. Security testing for authentication bypass and privilege escalation."
+          },
+          {
+            "id": 4,
+            "title": "Create analytics dashboard with usage metrics",
+            "description": "Build comprehensive analytics dashboard showing session counts, query patterns, and performance metrics for operational visibility",
+            "dependencies": [
+              2
+            ],
+            "details": "Develop analytics dashboard with real-time and historical views. Implement session tracking and user behavior analytics. Create visualizations for query patterns, response times, error rates, and service utilization. Add filtering and drill-down capabilities for detailed analysis. Include export functionality for reporting and compliance.",
+            "status": "pending",
+            "testStrategy": "Validate dashboard data accuracy against source metrics. Test real-time updates and historical data views. Verify filtering and export functionality. Load testing for dashboard performance."
+          },
+          {
+            "id": 5,
+            "title": "Implement alerting system and operational runbooks",
+            "description": "Set up comprehensive alerting for SLA violations and create operational runbooks for troubleshooting and incident response",
+            "dependencies": [
+              1,
+              3
+            ],
+            "details": "Configure alerting rules for latency thresholds, uptime SLA violations, error rates, and resource utilization. Set up notification channels (email, Slack, PagerDuty) with escalation policies. Create comprehensive runbooks covering common operational tasks, troubleshooting procedures, incident response, and recovery scenarios. Include automated remediation scripts where appropriate.",
+            "status": "pending",
+            "testStrategy": "Test alerting thresholds and notification delivery. Validate runbook procedures with simulated incidents. Test automated remediation scripts. Verify escalation policies and notification routing."
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "created": "2025-11-10T18:18:15.206Z",
+      "updated": "2025-11-10T18:18:15.206Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
