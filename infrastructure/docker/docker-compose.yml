@@ -1,0 +1,247 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: jarvis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jarvis}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password required}
+      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=vector"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - jarvis-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: jarvis-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Redis password required}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - jarvis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ingress Service - WebRTC audio streaming and session management
+  ingress:
+    build:
+      context: ../../services/ingress
+      dockerfile: Dockerfile
+    container_name: jarvis-ingress
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${INGRESS_PORT:-3000}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-jarvis}
+      JWT_SECRET: ${JWT_SECRET:?JWT secret required}
+      ASR_GATEWAY_URL: http://asr-gateway:3001
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3000:3000"
+      - "3478:3478/tcp"  # TURN/STUN TCP
+      - "3478:3478/udp"  # TURN/STUN UDP
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - jarvis-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ASR Gateway - Streaming transcription service
+  asr-gateway:
+    build:
+      context: ../../services/asr-gateway
+      dockerfile: Dockerfile
+    container_name: jarvis-asr-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${ASR_PORT:-3001}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:?Deepgram API key required}
+      GOOGLE_CLOUD_CREDENTIALS: ${GOOGLE_CLOUD_CREDENTIALS:-}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-}
+      PRIMARY_ASR_PROVIDER: ${PRIMARY_ASR_PROVIDER:-deepgram}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3001:3001"
+    networks:
+      - jarvis-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # RAG Service - Knowledge indexing and retrieval
+  rag-service:
+    build:
+      context: ../../services/rag-service
+      dockerfile: Dockerfile
+    container_name: jarvis-rag-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${RAG_PORT:-3002}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-jarvis}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OpenAI API key required for embeddings}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-ada-002}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      KNOWLEDGE_REFRESH_INTERVAL: ${KNOWLEDGE_REFRESH_INTERVAL:-180000}  # 3 minutes in ms
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - jarvis-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # LLM Router - Frontier model integration
+  llm-router:
+    build:
+      context: ../../services/llm-router
+      dockerfile: Dockerfile
+    container_name: jarvis-llm-router
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${LLM_PORT:-3003}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      PRIMARY_LLM_PROVIDER: ${PRIMARY_LLM_PROVIDER:-openai}
+      PRIMARY_LLM_MODEL: ${PRIMARY_LLM_MODEL:-gpt-4o}
+      RAG_SERVICE_URL: http://rag-service:3002
+      MAX_QUERY_TIMEOUT: ${MAX_QUERY_TIMEOUT:-10000}  # 10 seconds
+      MAX_PLANNING_STEPS: ${MAX_PLANNING_STEPS:-2}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3003:3003"
+    depends_on:
+      - rag-service
+    networks:
+      - jarvis-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # TTS Service - Text-to-speech synthesis
+  tts-service:
+    build:
+      context: ../../services/tts-service
+      dockerfile: Dockerfile
+    container_name: jarvis-tts-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${TTS_PORT:-3004}
+      GOOGLE_CLOUD_CREDENTIALS: ${GOOGLE_CLOUD_CREDENTIALS:-}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      PRIMARY_TTS_PROVIDER: ${PRIMARY_TTS_PROVIDER:-google}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3004:3004"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - jarvis-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: jarvis-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_logs:/var/log/nginx
+      - certbot_www:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    depends_on:
+      - ingress
+    networks:
+      - jarvis-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Certbot for SSL certificates
+  certbot:
+    image: certbot/certbot:latest
+    container_name: jarvis-certbot
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    command: certonly --webroot --webroot-path=/var/www/certbot --email ${SSL_EMAIL:-admin@example.com} --agree-tos --no-eff-email -d ${DOMAIN_NAME:-localhost}
+    networks:
+      - jarvis-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  certbot_www:
+    driver: local
+  certbot_certs:
+    driver: local
+
+networks:
+  jarvis-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

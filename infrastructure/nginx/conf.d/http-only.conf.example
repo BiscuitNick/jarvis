@@ -1,0 +1,70 @@
+# Use this configuration for initial setup before SSL certificates are obtained
+# Rename to default.conf and replace the SSL version temporarily
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    # Allow Certbot challenges
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Health check
+    location /health {
+        access_log off;
+        proxy_pass http://ingress_backend/health;
+        proxy_set_header Host $host;
+    }
+
+    # Ingress service
+    location /api/session {
+        limit_req zone=api_limit burst=20 nodelay;
+
+        proxy_pass http://ingress_backend;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # ASR Gateway
+    location /api/asr {
+        limit_req zone=api_limit burst=10 nodelay;
+        proxy_pass http://asr_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    # RAG Service
+    location /api/rag {
+        limit_req zone=api_limit burst=15 nodelay;
+        proxy_pass http://rag_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    # LLM Router
+    location /api/llm {
+        limit_req zone=api_limit burst=10 nodelay;
+        proxy_pass http://llm_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_buffering off;
+    }
+
+    # TTS Service
+    location /api/tts {
+        limit_req zone=api_limit burst=15 nodelay;
+        proxy_pass http://tts_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_buffering off;
+    }
+}
