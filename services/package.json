@@ -1,0 +1,25 @@
+{
+  "name": "jarvis-services",
+  "version": "1.0.0",
+  "description": "Jarvis voice assistant backend microservices",
+  "private": true,
+  "workspaces": [
+    "ingress-service",
+    "asr-gateway",
+    "llm-router",
+    "rag-service",
+    "tts-service",
+    "../packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces",
+    "clean": "npm run clean --workspaces && rm -rf node_modules",
+    "docker:build": "./scripts/build-all.sh",
+    "docker:push": "./scripts/push-all.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}

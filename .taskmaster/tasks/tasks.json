@@ -5,7 +5,7 @@
         "id": 1,
         "title": "Set up AWS Lightsail infrastructure and project foundation",
         "description": "Set up AWS Lightsail infrastructure with single instance running Docker Compose for all backend services, supporting demo app with 10 concurrent users",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "details": "Provision AWS Lightsail instance ($12-20/month) with Docker and Docker Compose. Configure Docker Compose stack for all backend services: ingress, ASR gateway, TTS, RAG, and LLM services. Set up Lightsail managed Postgres database or containerized DB within stack. Configure nginx reverse proxy for service routing and SSL termination. Implement GitHub Actions CI/CD pipeline with SSH deployment to Lightsail instance. Configure DNS and SSL certificates for domain access. Optimize for demo environment supporting 10 concurrent users with cost-effective single-instance architecture.",
@@ -17,7 +17,7 @@
             "description": "Create and configure AWS Lightsail instance with Docker, Docker Compose, and necessary system packages for hosting all backend services",
             "dependencies": [],
             "details": "Create Lightsail instance with appropriate size for demo workload ($12-20/month range). Configure instance with Ubuntu/Amazon Linux. Install Docker and Docker Compose. Set up SSH key access and firewall rules for HTTP/HTTPS/SSH. Configure static IP address for consistent access. Install system monitoring tools and basic security hardening.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Verify Lightsail instance creation and SSH connectivity. Test Docker and Docker Compose installation. Validate firewall rules and port accessibility. Check static IP assignment and DNS resolution."
           },
           {
@@ -28,7 +28,7 @@
               1
             ],
             "details": "Create docker-compose.yml with service definitions for all backend components. Configure internal Docker networks for service-to-service communication. Set up shared volumes for persistent data and configurations. Define resource limits appropriate for Lightsail instance size. Include health checks and restart policies for all services. Configure environment variable management for service configuration.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test Docker Compose stack deployment with all services. Validate service startup order and dependencies. Verify internal networking between services. Test resource allocation and performance on Lightsail instance."
           },
           {
@@ -37,7 +37,7 @@
             "description": "Configure either Lightsail managed Postgres database or containerized PostgreSQL with pgvector support for embeddings storage",
             "dependencies": [],
             "details": "Evaluate and implement either Lightsail managed Postgres database or PostgreSQL container within Docker Compose stack. Enable pgvector extension for vector embeddings. Configure database schema and initial setup scripts. Set up connection pooling and backup strategy. Implement database initialization and migration scripts for development workflow.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test database connectivity from Lightsail instance. Verify pgvector extension installation and functionality. Test backup and restore procedures. Validate performance with expected demo workload."
           },
           {
@@ -48,7 +48,7 @@
               2
             ],
             "details": "Install and configure nginx on Lightsail instance as reverse proxy. Create location blocks for routing to ingress service, admin panel, and health endpoints. Configure SSL certificate management using Let's Encrypt/Certbot. Set up automatic certificate renewal. Configure rate limiting and basic security headers. Add request logging and monitoring.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test nginx configuration and service routing. Validate SSL certificate installation and renewal. Test rate limiting and security header implementation. Verify access logs and monitoring setup."
           },
           {
@@ -60,7 +60,7 @@
               4
             ],
             "details": "Create GitHub Actions workflow with build, test, and deploy stages. Configure SSH-based deployment with private key authentication. Implement Docker image building and deployment to Lightsail instance. Add deployment rollback capabilities using Docker Compose. Configure environment-specific deployments (dev/staging/production). Include health checks post-deployment and notification systems.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test complete CI/CD pipeline with sample service deployment. Verify SSH authentication and deployment security. Test rollback functionality and health check validation. Validate deployment notifications and error handling."
           },
           {
@@ -72,13 +72,13 @@
               4
             ],
             "details": "Configure domain DNS records pointing to Lightsail static IP. Set up SSL certificate automation with Let's Encrypt. Implement basic monitoring using CloudWatch Lightsail metrics or lightweight alternatives. Configure log aggregation from Docker containers. Set up alerting for critical failures and resource exhaustion. Create backup and disaster recovery procedures for single-instance architecture.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test domain resolution and SSL certificate validity. Validate monitoring metrics collection and alerting. Test backup and recovery procedures. Verify log aggregation and retention policies."
           }
         ]
       },
       {
-        "id": "2",
+        "id": 2,
         "title": "Set up PostgreSQL database with pgvector extension",
         "description": "Set up PostgreSQL database with pgvector extension for embeddings storage and configure database schema for users, sessions, and knowledge index using Lightsail managed Postgres or containerized solution for demo scale",
         "status": "pending",
@@ -95,7 +95,7 @@
             "description": "Configure either Lightsail managed Postgres or containerized PostgreSQL with pgvector extension enabled for demo scale",
             "dependencies": [],
             "details": "Evaluate and implement either Lightsail managed Postgres database ($15/month) or PostgreSQL container within Docker Compose stack for demo environment supporting 10 concurrent users. Enable pgvector extension for vector embeddings storage. Configure appropriate connection settings and resource limits for demo scale. Test pgvector functionality with sample vector operations. Document setup process for both deployment options.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Verify database deployment and pgvector extension availability. Test basic vector operations and indexing. Validate connectivity from application services with demo load."
           },
           {
@@ -106,7 +106,7 @@
               1
             ],
             "details": "Design and implement schema tables: users (id, device_token, created_at), sessions (id, user_id, context_data, expires_at), knowledge_documents (id, source_url, content, metadata, created_at), embeddings (id, document_id, vector, chunk_text, embedding_model), logs (id, session_id, request_data, response_data, created_at, expires_at). Add appropriate indexes including vector indexes for pgvector. Implement foreign key constraints and data validation rules optimized for demo workload.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Validate schema creation and constraints. Test sample data insertion across all tables. Verify vector column functionality and indexing performance with demo data volume."
           },
           {
@@ -116,7 +116,7 @@
             "dependencies": [
               2
             ],
-            "details": "Configure direct database connections without RDS Proxy for simplified demo architecture. Set up connection pooling within application services for optimal performance with 10 concurrent users. Configure connection parameters and timeouts appropriate for demo scale. Implement connection health checks and basic retry logic. Document connection configuration for both Lightsail managed and containerized deployment options.",
+            "details": "Configure direct database connections without RDS Proxy for simplified demo architecture. Set up connection pooling within application services for optimal performance with 10 concurrent users. Configure connection parameters and timeouts appropriate for demo scale. Implement connection health checks and basic retry logic. Document connection configuration for both Lightsail managed and containerized deployment options.\n<info added on 2025-11-10T22:32:00.392Z>\nContainerized Postgres is available at host postgres on jarvis-network; use connection string postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/jarvis. Add DATABASE_URL to llm-router in infrastructure/docker/docker-compose.yml:133–151 with the same value used by ingress and rag-service. Implement per-service connection pooling using pg’s Pool with a singleton module in each service: create services/ingress-service/src/db/pool.ts, services/rag-service/src/db/pool.ts, and services/llm-router/src/db/pool.ts that read process.env.DATABASE_URL and configure max, idleTimeoutMillis, connectionTimeoutMillis, and application_name (jarvis-ingress, jarvis-rag, jarvis-llm-router). Demo-scale defaults: rag-service max=10, ingress-service max=5, llm-router max=4; idleTimeoutMillis=10000; connectionTimeoutMillis=2000; allowExitOnIdle=true. Add basic startup retry (3 attempts, 200ms exponential backoff) and graceful shutdown (pool.end on SIGTERM). Update health endpoints to include a DB check (SELECT 1) and report db: up/down in services/ingress-service/src/index.ts, services/rag-service/src/index.ts, and services/llm-router/src/index.ts. Add dependencies pg ^8.11 and devDependency @types/pg ^8.x to services/ingress-service/package.json and services/llm-router/package.json (rag-service already includes pg). Add pool tuning envs to .env.example: PGPOOL_MAX_INGRESS=5, PGPOOL_MAX_RAG=10, PGPOOL_MAX_LLM=4, PG_CONN_TIMEOUT_MS=2000, PG_IDLE_TIMEOUT_MS=10000, PG_CONNECT_RETRIES=3, and wire each service’s pool.ts to prefer its service-specific PGPOOL_MAX while falling back to a sane default. Ensure no SSL is set for Docker internal connections.\n</info added on 2025-11-10T22:32:00.392Z>",
             "status": "pending",
             "testStrategy": "Test connection performance under demo load scenarios. Verify connection pooling efficiency. Test connection recovery and retry mechanisms with 10 concurrent users."
           },
@@ -127,7 +127,7 @@
             "dependencies": [
               2
             ],
-            "details": "Implement lightweight migration system using simple SQL scripts or basic migration tool suitable for demo deployment. Create initial migration files for all tables and indexes. Set up migration execution process that can be run during deployment or container startup. Implement basic validation for migration success. Document migration procedures for demo environment maintenance and updates.",
+            "details": "Implement lightweight migration system using simple SQL scripts or basic migration tool suitable for demo deployment. Create initial migration files for all tables and indexes. Set up migration execution process that can be run during deployment or container startup. Implement basic validation for migration success. Document migration procedures for demo environment maintenance and updates.\n<info added on 2025-11-10T22:34:14.064Z>\nInitial schema in infrastructure/docker/postgres/init.sql is the baseline (v0). Add versioned SQL migrations and a simple runner:\n\nCreate directory infrastructure/docker/postgres/migrations and use filenames like 001__description.sql, 002__next_change.sql, etc. Do not duplicate init.sql; only future changes go here.\n\nAdd infrastructure/scripts/run-migrations.sh that:\n- Reads POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST (postgres in docker-compose), POSTGRES_PORT (5432). Exports PGPASSWORD for psql.\n- Waits for DB readiness (pg_isready).\n- Creates schema_migrations table if not exists: version integer primary key, name text not null, applied_at timestamptz default now().\n- Takes an advisory lock (SELECT pg_advisory_lock(48151623)) to prevent concurrent runs.\n- Iterates migrations in /migrations sorted by filename; for each, if version not present in schema_migrations, runs psql -v ON_ERROR_STOP=1 -f file, then inserts a row into schema_migrations(version, name).\n- Releases advisory lock and prints a summary of applied vs total files. Exits non‑zero on any failed migration.\n\nUpdate infrastructure/docker/docker-compose.yml to add a one‑shot migration service that runs on demand and can be invoked automatically:\ndb-migrations:\n  image: postgres:15-alpine\n  container_name: jarvis-db-migrations\n  depends_on:\n    postgres:\n      condition: service_healthy\n  environment:\n    POSTGRES_DB: ${POSTGRES_DB:-jarvis}\n    POSTGRES_USER: ${POSTGRES_USER:-postgres}\n    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}\n    POSTGRES_HOST: postgres\n    POSTGRES_PORT: 5432\n  volumes:\n    - ../scripts/run-migrations.sh:/scripts/run-migrations.sh:ro\n    - ./postgres/migrations:/migrations:ro\n  networks:\n    - jarvis-network\n  command: sh -c \"chmod +x /scripts/run-migrations.sh && /scripts/run-migrations.sh\"\n  restart: \"no\"\n\nIntegrate migrations into deployment flow in infrastructure/scripts/deploy.sh by adding a run_migrations step after build_services and before start_services:\ndocker-compose -f infrastructure/docker/docker-compose.yml run --rm db-migrations\n\nLocal/dev usage: docker compose -f infrastructure/docker/docker-compose.yml run --rm db-migrations then docker compose up -d. For automated startup via the deployment script, run_migrations ensures migrations complete before services start.\n\nBasic validation: the runner exits on first error (ON_ERROR_STOP), logs each applied file, and at the end checks that count(schema_migrations) equals number of *.sql files in migrations; if not, it exits with non‑zero status.\n\nThis keeps init.sql for first‑time database creation and uses migrations/ for all subsequent schema changes, aligns with existing Docker layout, and avoids adding new Node dependencies to services/rag-service (which already depends on pg and pgvector). If desired later, this structure can be swapped to Flyway (flyway/flyway container, V1__ naming) or node-pg-migrate with minimal changes to the runner and file naming.\n</info added on 2025-11-10T22:34:14.064Z>",
             "status": "pending",
             "testStrategy": "Test migration execution during deployment. Validate migration versioning and dependency handling. Test migration process with both deployment options."
           },
@@ -138,7 +138,7 @@
             "dependencies": [
               2
             ],
-            "details": "Configure basic daily database backups appropriate for demo environment using either Lightsail managed backup features or simple backup scripts for containerized deployment. Implement TTL cleanup job for logs table (24-hour retention) using cron job or scheduled task within the application. Set up basic monitoring for backup success. Create simple restore procedures and documentation suitable for demo recovery scenarios.",
+            "details": "Configure basic daily database backups appropriate for demo environment using either Lightsail managed backup features or simple backup scripts for containerized deployment. Implement TTL cleanup job for logs table (24-hour retention) using cron job or scheduled task within the application. Set up basic monitoring for backup success. Create simple restore procedures and documentation suitable for demo recovery scenarios.\n<info added on 2025-11-10T22:36:43.966Z>\n- Schedule TTL cleanup using existing functions in infrastructure/docker/postgres/init.sql by adding a daily cron entry and a wrapper script:\n  - Add infrastructure/scripts/run-db-ttl-cleanup.sh that sources infrastructure/docker/.env (if present) and runs: docker-compose -f infrastructure/docker/docker-compose.yml exec -T postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-jarvis} -c \"SELECT cleanup_expired_logs();\" -c \"SELECT cleanup_expired_sessions();\"\n  - Make executable (chmod +x) and append to infrastructure/scripts/setup-lightsail.sh after existing cron jobs: (crontab -u ubuntu -l 2>/dev/null || true; echo \"15 3 * * * /opt/jarvis/infrastructure/scripts/run-db-ttl-cleanup.sh >> /opt/jarvis/logs/db-maintenance.log 2>&1\") | crontab -u ubuntu -\n  - For Lightsail managed PostgreSQL, document running the same SELECTs via psql using PGHOST/PGPORT/PGUSER/PGPASSWORD (no docker-compose exec), and add a matching cron entry.\n\n- Implement database backup and restore scripts:\n  - infrastructure/scripts/db-backup.sh: read env from infrastructure/docker/.env, create /opt/jarvis/backups if missing, dump with docker-compose -f infrastructure/docker/docker-compose.yml exec -T postgres pg_dump -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-jarvis} > /opt/jarvis/backups/jarvis-$(date +%Y%m%d-%H%M%S).sql; optionally prune files older than 7 days. Log to /opt/jarvis/logs/db-backup.log.\n  - infrastructure/scripts/db-restore.sh: usage db-restore.sh /path/to/backup.sql; stream file into docker-compose -f infrastructure/docker/docker-compose.yml exec -T postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-jarvis}.\n  - Add daily backup cron in infrastructure/scripts/setup-lightsail.sh: (crontab -u ubuntu -l 2>/dev/null || true; echo \"0 4 * * * /opt/jarvis/infrastructure/scripts/db-backup.sh >> /opt/jarvis/logs/db-backup.log 2>&1\") | crontab -u ubuntu -\n\n- Update deployment documentation (infrastructure/README.md, Database Backup section) to:\n  - Reference new scripts (db-backup.sh, db-restore.sh) alongside existing one-liners that use docker-compose exec postgres pg_dump and psql.\n  - Include cron-based scheduling examples for both containerized and managed PostgreSQL setups.\n  - Note backup location (/opt/jarvis/backups), log files (/opt/jarvis/logs/db-backup.log and /opt/jarvis/logs/db-maintenance.log), and retention.\n\n- Add restore test procedure to docs to validate backups:\n  - Insert a test row: docker-compose -f infrastructure/docker/docker-compose.yml exec -T postgres psql -U postgres -d jarvis -c \"INSERT INTO users(device_token) VALUES('backup_test_token');\"\n  - Run backup: /opt/jarvis/infrastructure/scripts/db-backup.sh\n  - Delete the row: docker-compose -f infrastructure/docker/docker-compose.yml exec -T postgres psql -U postgres -d jarvis -c \"DELETE FROM users WHERE device_token='backup_test_token';\"\n  - Restore: /opt/jarvis/infrastructure/scripts/db-restore.sh /opt/jarvis/backups/jarvis-YYYYMMDD-HHMMSS.sql\n  - Verify: docker-compose -f infrastructure/docker/docker-compose.yml exec -T postgres psql -U postgres -d jarvis -c \"SELECT count(*) FROM users WHERE device_token='backup_test_token';\"\n  - TTL cleanup verification: create logs and sessions with expires_at < now, run /opt/jarvis/infrastructure/scripts/run-db-ttl-cleanup.sh, and verify logs are deleted and sessions marked expired.\n</info added on 2025-11-10T22:36:43.966Z>",
             "status": "pending",
             "testStrategy": "Test backup creation and basic restore procedures. Verify TTL cleanup job execution and accuracy with demo data. Test backup monitoring and alerting for demo environment."
           }
@@ -223,7 +223,7 @@
               4,
               6
             ],
-            "details": "Configure Kubernetes HPA or AWS Auto Scaling for horizontal scaling. Set up load balancing with session affinity for WebRTC connections. Implement resource monitoring for CPU, memory, and network usage. Configure scaling triggers based on concurrent session count and resource utilization. Add graceful shutdown handling for scaling down. Implement health checks for auto-scaling decisions.",
+            "details": "Configure Kubernetes HPA or AWS Auto Scaling for horizontal scaling. Set up load balancing with session affinity for WebRTC connections. Implement resource monitoring for CPU, memory, and network usage. Configure scaling triggers based on concurrent session count and resource utilization. Add graceful shutdown handling for scaling down. Implement health checks for auto-scaling decisions.\n<info added on 2025-11-10T22:39:42.125Z>\nDemo-scale on Lightsail with Docker Compose (single instance, manual scaling). Remove Kubernetes HPA and AWS Auto Scaling references.\n\nResource monitoring:\n- Add cadvisor to infrastructure/docker/docker-compose.yml to observe CPU/memory/network for all containers: image gcr.io/cadvisor/cadvisor:latest; ports \"9090:8080\"; volumes /:/rootfs:ro, /var/run:/var/run:ro, /sys:/sys:ro, /var/lib/docker/:/var/lib/docker:ro; networks jarvis-network. Access at http://<host>:9090 for manual scale decisions.\n- For a lightweight option, use docker stats and extend each service’s /healthz to include process.memoryUsage and process.uptime for quick checks (services/*/src/index.ts).\n\nGraceful shutdown (SIGTERM/SIGINT):\n- In each Node service entrypoint (e.g., services/ingress-service/src/index.ts, services/asr-gateway/src/index.ts, services/rag-service/src/index.ts, services/llm-router/src/index.ts, services/tts-service/src/index.ts), keep a server reference from app.listen and add handlers that: set a draining flag, have /healthz return 503 when draining, stop accepting new connections, server.close, then force-exit after a 10–30s timeout.\n- In infrastructure/docker/docker-compose.yml, set init: true and stop_grace_period: 20s (or 30s) on all app services to ensure graceful termination.\n\nHealth checks alignment:\n- All app services currently expose /healthz on PORT; update infrastructure/docker/docker-compose.yml to either remove the service-level healthcheck blocks (rely on Dockerfile HEALTHCHECK that uses Node to GET /healthz) or change tests to use Node (not wget) and point to /healthz.\n- Update infrastructure/nginx/conf.d/default.conf so the /health location proxies to http://ingress_backend/healthz (not /health).\n\nSession affinity and scaling guidance:\n- Keep a single ingress replica on the Lightsail instance; it binds 3478/udp and requires affinity for WebRTC. Do not scale the ingress service on a single host.\n- If needed, manually scale stateless services only (e.g., rag-service, tts-service, llm-router, asr-gateway) with docker compose -f infrastructure/docker/docker-compose.yml up -d --scale rag-service=2 tts-service=2 llm-router=2 asr-gateway=2 and monitor via cadvisor/docker stats.\n- For >10 users or multi-instance needs, add a Lightsail Load Balancer with sticky sessions and run one ingress per instance; keep sticky sessions enabled to preserve WebRTC session affinity.\n\nNotes:\n- Fix path mismatch in infrastructure/docker/docker-compose.yml for ingress build context to point at ../../services/ingress-service.\n- Ensure Nginx upstreams in infrastructure/nginx/nginx.conf continue to target service ports defined by PORT env vars (ingress:3000, asr-gateway:3001, etc.) after the healthcheck alignment.\n</info added on 2025-11-10T22:39:42.125Z>",
             "status": "pending",
             "testStrategy": "Load test with simulated concurrent sessions to trigger auto-scaling. Test scaling up and down scenarios. Validate session affinity and load distribution. Monitor resource utilization during scaling events."
           }
@@ -778,7 +778,7 @@
             "title": "Set up monitoring stack with CloudWatch/Prometheus",
             "description": "Implement comprehensive monitoring infrastructure using CloudWatch or Prometheus to track system metrics and performance indicators",
             "dependencies": [],
-            "details": "Deploy and configure CloudWatch/Prometheus monitoring stack. Set up metric collection for latency metrics (p50/p95), Word Error Rate, grounding success rate, and service health indicators. Configure metric retention policies and data aggregation rules. Implement custom metrics for business KPIs and technical performance indicators.",
+            "details": "Deploy and configure CloudWatch/Prometheus monitoring stack. Set up metric collection for latency metrics (p50/p95), Word Error Rate, grounding success rate, and service health indicators. Configure metric retention policies and data aggregation rules. Implement custom metrics for business KPIs and technical performance indicators.\n<info added on 2025-11-10T22:42:24.970Z>\nLeverage Lightsail’s native CloudWatch integration for instance-level CPU, network, and status checks; no additional CloudWatch setup required. For application metrics, add Prometheus and Grafana to infrastructure/docker/docker-compose.yml and create infrastructure/docker/prometheus/prometheus.yml with scrape_configs targeting http://ingress:3000/metrics, http://asr-gateway:3001/metrics, http://rag-service:3002/metrics, http://llm-router:3003/metrics, and http://tts-service:3004/metrics. Keep /metrics endpoints internal only; do not expose them via nginx.\n\nIn each Node service add prom-client, pino, and pino-http to package.json, then instrument services/*/src/index.ts to expose GET /metrics using prom-client.register.metrics(), enable collectDefaultMetrics, and add an http_request_duration_seconds histogram with method, route, status_code, and service labels; wrap Express handlers with middleware to start a timer on request and observe duration on response. Implement custom metrics: in services/asr-gateway/src/index.ts record asr_requests_total counter and an asr_wer histogram (or summary for demo) when WER is available; in services/rag-service/src/index.ts record grounding_success_total and grounding_failure_total counters at decision points; in services/llm-router/src/index.ts record llm_requests_total and request latency via the shared HTTP histogram. Use histogram_quantile in Grafana dashboards to compute p50/p95 from the HTTP duration histogram; add panels for WER distribution and grounding success rate.\n\nImplement structured JSON logging with correlation IDs across all services using pino and pino-http. Initialize a pino logger at process start using process.env.LOG_LEVEL (defined in infrastructure/docker/docker-compose.yml) and app.use(pinoHttp({ genReqId: existing X-Request-Id or generated, custom props including service name })). Log method, url, statusCode, latency_ms, request_id, user_agent, and remote_ip for every request and include request_id on error logs for joins. Propagate the correlation ID from nginx to services by adding proxy_set_header X-Request-Id $request_id in infrastructure/nginx/conf.d/default.conf for each upstream location so downstream logs and metrics share the same request_id. Optional alternative for custom metrics is StatsD/Telegraf shipping to CloudWatch, but prefer Prometheus+Grafana for the demo as above.\n</info added on 2025-11-10T22:42:24.970Z>",
             "status": "pending",
             "testStrategy": "Validate metric collection accuracy and retention. Test metric aggregation and query performance. Verify monitoring stack availability and failover capabilities."
           },
@@ -832,7 +832,7 @@
     ],
     "metadata": {
       "created": "2025-11-10T18:18:15.206Z",
-      "updated": "2025-11-10T18:18:15.206Z",
+      "updated": "2025-11-10T22:29:17.488Z",
       "description": "Tasks for master context"
     }
   }
