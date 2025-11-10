@@ -3,101 +3,100 @@
     "tasks": [
       {
         "id": 1,
-        "title": "Set up AWS infrastructure and project foundation",
-        "description": "Initialize AWS infrastructure with ECS/Fargate cluster, networking, and CI/CD pipeline for the Jarvis backend services",
-        "details": "Set up AWS ECS/Fargate cluster with VPC, subnets, security groups, and load balancers. Create ECR repositories for Docker images. Set up GitHub Actions or CodePipeline for CI/CD. Create base Docker configurations and infrastructure-as-code (Terraform/CDK) templates. Establish development, staging, and production environments with proper IAM roles and policies.",
-        "testStrategy": "Validate infrastructure deployment with smoke tests. Verify ECS cluster can run basic container workloads. Test CI/CD pipeline with dummy service deployments. Check networking connectivity between services.",
-        "priority": "high",
-        "dependencies": [],
+        "title": "Set up AWS Lightsail infrastructure and project foundation",
+        "description": "Set up AWS Lightsail infrastructure with single instance running Docker Compose for all backend services, supporting demo app with 10 concurrent users",
         "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "details": "Provision AWS Lightsail instance ($12-20/month) with Docker and Docker Compose. Configure Docker Compose stack for all backend services: ingress, ASR gateway, TTS, RAG, and LLM services. Set up Lightsail managed Postgres database or containerized DB within stack. Configure nginx reverse proxy for service routing and SSL termination. Implement GitHub Actions CI/CD pipeline with SSH deployment to Lightsail instance. Configure DNS and SSL certificates for domain access. Optimize for demo environment supporting 10 concurrent users with cost-effective single-instance architecture.",
+        "testStrategy": "Validate Lightsail instance deployment and SSH access. Test Docker Compose service startup and health checks. Verify nginx reverse proxy routing and SSL configuration. Test GitHub Actions deployment pipeline with sample service. Validate database connectivity and service-to-service communication within Docker network.",
         "subtasks": [
           {
             "id": 1,
-            "title": "Configure VPC and core networking infrastructure",
-            "description": "Set up AWS VPC with public and private subnets across multiple availability zones, configure NAT gateways, internet gateways, and route tables for secure network architecture",
+            "title": "Provision AWS Lightsail instance and initial setup",
+            "description": "Create and configure AWS Lightsail instance with Docker, Docker Compose, and necessary system packages for hosting all backend services",
             "dependencies": [],
-            "details": "Create VPC with CIDR block planning for dev/staging/prod environments. Configure public subnets for load balancers and NAT gateways, private subnets for ECS tasks. Set up route tables, security groups with least privilege access, and network ACLs. Configure VPC endpoints for AWS services to reduce NAT gateway costs.",
+            "details": "Create Lightsail instance with appropriate size for demo workload ($12-20/month range). Configure instance with Ubuntu/Amazon Linux. Install Docker and Docker Compose. Set up SSH key access and firewall rules for HTTP/HTTPS/SSH. Configure static IP address for consistent access. Install system monitoring tools and basic security hardening.",
             "status": "pending",
-            "testStrategy": "Validate VPC creation and subnet connectivity. Test internet access from private subnets through NAT gateways. Verify security group rules with network testing tools."
+            "testStrategy": "Verify Lightsail instance creation and SSH connectivity. Test Docker and Docker Compose installation. Validate firewall rules and port accessibility. Check static IP assignment and DNS resolution."
           },
           {
             "id": 2,
-            "title": "Set up ECS/Fargate cluster with load balancing",
-            "description": "Create ECS cluster with Fargate capacity providers, configure Application Load Balancer with target groups, and establish service discovery for inter-service communication",
+            "title": "Create Docker Compose configuration for all services",
+            "description": "Design and implement Docker Compose stack running ingress, ASR gateway, TTS, RAG, and LLM services with proper networking and resource allocation",
             "dependencies": [
               1
             ],
-            "details": "Create ECS cluster with Fargate capacity providers and container insights enabled. Configure ALB with HTTPS listeners, SSL certificates, and target groups for different services. Set up ECS service discovery with Route53 private DNS for internal service communication. Configure health checks and auto-scaling policies.",
+            "details": "Create docker-compose.yml with service definitions for all backend components. Configure internal Docker networks for service-to-service communication. Set up shared volumes for persistent data and configurations. Define resource limits appropriate for Lightsail instance size. Include health checks and restart policies for all services. Configure environment variable management for service configuration.",
             "status": "pending",
-            "testStrategy": "Deploy test containers to verify ECS cluster functionality. Test load balancer health checks and routing. Validate service discovery resolution between services."
+            "testStrategy": "Test Docker Compose stack deployment with all services. Validate service startup order and dependencies. Verify internal networking between services. Test resource allocation and performance on Lightsail instance."
           },
           {
             "id": 3,
-            "title": "Create ECR repositories and Docker configurations",
-            "description": "Set up Amazon ECR repositories for each service, create base Docker configurations, and establish image versioning and security scanning policies",
+            "title": "Set up database solution with Lightsail managed Postgres",
+            "description": "Configure either Lightsail managed Postgres database or containerized PostgreSQL with pgvector support for embeddings storage",
             "dependencies": [],
-            "details": "Create ECR repositories for ingress, ASR gateway, TTS, RAG, and LLM services. Configure repository policies for cross-account access if needed. Create base Dockerfile templates with multi-stage builds for Node.js and Go services. Enable image scanning for vulnerabilities and configure lifecycle policies for image cleanup.",
+            "details": "Evaluate and implement either Lightsail managed Postgres database or PostgreSQL container within Docker Compose stack. Enable pgvector extension for vector embeddings. Configure database schema and initial setup scripts. Set up connection pooling and backup strategy. Implement database initialization and migration scripts for development workflow.",
             "status": "pending",
-            "testStrategy": "Test Docker image builds and pushes to ECR. Verify image scanning functionality and vulnerability detection. Test image pulling from ECS tasks."
+            "testStrategy": "Test database connectivity from Lightsail instance. Verify pgvector extension installation and functionality. Test backup and restore procedures. Validate performance with expected demo workload."
           },
           {
             "id": 4,
-            "title": "Implement CI/CD pipeline with GitHub Actions",
-            "description": "Create GitHub Actions workflows for automated testing, building, and deployment of services to ECS with proper environment promotion",
+            "title": "Configure nginx reverse proxy and SSL termination",
+            "description": "Set up nginx as reverse proxy for routing requests to appropriate Docker Compose services with SSL/TLS configuration",
             "dependencies": [
-              2,
-              3
+              2
             ],
-            "details": "Set up GitHub Actions workflows for each service with build, test, and deploy stages. Configure AWS IAM roles for OIDC authentication from GitHub. Implement automated ECS service updates with blue-green deployment strategy. Create environment-specific deployment workflows for dev/staging/prod with approval gates for production.",
+            "details": "Install and configure nginx on Lightsail instance as reverse proxy. Create location blocks for routing to ingress service, admin panel, and health endpoints. Configure SSL certificate management using Let's Encrypt/Certbot. Set up automatic certificate renewal. Configure rate limiting and basic security headers. Add request logging and monitoring.",
             "status": "pending",
-            "testStrategy": "Test complete CI/CD pipeline with dummy service deployments. Verify automated rollbacks on deployment failures. Test environment promotion workflows with proper approvals."
+            "testStrategy": "Test nginx configuration and service routing. Validate SSL certificate installation and renewal. Test rate limiting and security header implementation. Verify access logs and monitoring setup."
           },
           {
             "id": 5,
-            "title": "Configure environment-specific deployments",
-            "description": "Set up separate dev, staging, and production environments with proper resource isolation, scaling configurations, and environment-specific variables",
+            "title": "Implement GitHub Actions CI/CD with SSH deployment",
+            "description": "Create GitHub Actions workflow for automated deployment to Lightsail instance via SSH with proper security and rollback capabilities",
             "dependencies": [
               2,
               4
             ],
-            "details": "Create separate ECS services and task definitions for each environment with appropriate CPU/memory allocation. Configure environment-specific ALB target groups and Route53 records. Set up Parameter Store or Secrets Manager for environment variables and secrets. Configure auto-scaling policies based on environment requirements (dev: minimal, prod: high availability).",
+            "details": "Create GitHub Actions workflow with build, test, and deploy stages. Configure SSH-based deployment with private key authentication. Implement Docker image building and deployment to Lightsail instance. Add deployment rollback capabilities using Docker Compose. Configure environment-specific deployments (dev/staging/production). Include health checks post-deployment and notification systems.",
             "status": "pending",
-            "testStrategy": "Deploy services to all environments and verify isolation. Test environment-specific configurations and scaling behavior. Validate secret management and environment variable injection."
+            "testStrategy": "Test complete CI/CD pipeline with sample service deployment. Verify SSH authentication and deployment security. Test rollback functionality and health check validation. Validate deployment notifications and error handling."
           },
           {
             "id": 6,
-            "title": "Establish IAM roles and security policies",
-            "description": "Create least-privilege IAM roles for ECS tasks, CI/CD processes, and cross-service communication with comprehensive security policies and access logging",
+            "title": "Configure DNS, SSL certificates, and monitoring setup",
+            "description": "Set up domain configuration, SSL certificates, and basic monitoring for the Lightsail deployment with cost-effective observability",
             "dependencies": [
               1,
-              2
+              4
             ],
-            "details": "Create IAM roles for ECS task execution and tasks with minimal required permissions. Set up service-specific roles for accessing ECR, CloudWatch, Parameter Store, and RDS. Configure cross-service authentication policies. Enable CloudTrail for audit logging and set up IAM access analyzer. Create emergency access procedures and rotation policies for long-term credentials.",
+            "details": "Configure domain DNS records pointing to Lightsail static IP. Set up SSL certificate automation with Let's Encrypt. Implement basic monitoring using CloudWatch Lightsail metrics or lightweight alternatives. Configure log aggregation from Docker containers. Set up alerting for critical failures and resource exhaustion. Create backup and disaster recovery procedures for single-instance architecture.",
             "status": "pending",
-            "testStrategy": "Test service deployments with IAM roles to verify proper permissions. Conduct permission boundary testing to ensure least privilege. Validate CloudTrail logging and access patterns."
+            "testStrategy": "Test domain resolution and SSL certificate validity. Validate monitoring metrics collection and alerting. Test backup and recovery procedures. Verify log aggregation and retention policies."
           }
         ]
       },
       {
-        "id": 2,
-        "title": "Implement Aurora Postgres database with pgvector extension",
-        "description": "Set up Aurora Postgres cluster with pgvector extension for embeddings storage and configure database schema for users, sessions, and knowledge index",
-        "details": "Create Aurora Postgres cluster with pgvector extension enabled. Design and implement database schema including: users table (device tokens), sessions table (short-term memory), knowledge_documents table, embeddings table with vector columns, and logs table. Configure connection pooling with RDS Proxy. Set up database migrations system. Implement backup and restore procedures with 24-hour TTL for logs.",
-        "testStrategy": "Test database connectivity and pgvector functionality. Validate schema with sample data inserts. Test vector similarity searches. Verify TTL cleanup jobs work correctly. Load test with expected concurrent connections.",
-        "priority": "high",
+        "id": "2",
+        "title": "Set up PostgreSQL database with pgvector extension",
+        "description": "Set up PostgreSQL database with pgvector extension for embeddings storage and configure database schema for users, sessions, and knowledge index using Lightsail managed Postgres or containerized solution for demo scale",
+        "status": "pending",
         "dependencies": [
           1
         ],
-        "status": "pending",
+        "priority": "high",
+        "details": "Set up PostgreSQL database using either Lightsail managed Postgres ($15/month) or containerized PostgreSQL with Docker Compose for demo environment supporting 10 concurrent users. Enable pgvector extension for vector embeddings storage. Design and implement database schema including: users table (device tokens), sessions table (short-term memory), knowledge_documents table, embeddings table with vector columns, and logs table. Configure direct database connections (no RDS Proxy needed for demo scale). Set up simple migration system. Implement basic daily backup procedures with 24-hour TTL for logs.",
+        "testStrategy": "Test database connectivity and pgvector functionality. Validate schema with sample data inserts. Test vector similarity searches with demo workload. Verify TTL cleanup jobs work correctly. Test with 10 concurrent connections to validate demo performance.",
         "subtasks": [
           {
             "id": 1,
-            "title": "Set up Aurora Postgres cluster with pgvector extension",
-            "description": "Create and configure Aurora Postgres cluster with pgvector extension enabled for vector embeddings storage",
+            "title": "Set up PostgreSQL database with pgvector extension for demo environment",
+            "description": "Configure either Lightsail managed Postgres or containerized PostgreSQL with pgvector extension enabled for demo scale",
             "dependencies": [],
-            "details": "Create Aurora Postgres cluster in AWS with pgvector extension installed and enabled. Configure cluster parameters for optimal vector search performance. Set up appropriate instance sizes and storage configurations. Enable encryption at rest and in transit. Configure VPC security groups and subnet groups for secure access. Test pgvector functionality with sample vector operations.",
+            "details": "Evaluate and implement either Lightsail managed Postgres database ($15/month) or PostgreSQL container within Docker Compose stack for demo environment supporting 10 concurrent users. Enable pgvector extension for vector embeddings storage. Configure appropriate connection settings and resource limits for demo scale. Test pgvector functionality with sample vector operations. Document setup process for both deployment options.",
             "status": "pending",
-            "testStrategy": "Verify cluster creation and pgvector extension availability. Test basic vector operations and indexing. Validate security group configurations and connectivity."
+            "testStrategy": "Verify database deployment and pgvector extension availability. Test basic vector operations and indexing. Validate connectivity from application services with demo load."
           },
           {
             "id": 2,
@@ -106,42 +105,42 @@
             "dependencies": [
               1
             ],
-            "details": "Design and implement schema tables: users (id, device_token, created_at), sessions (id, user_id, context_data, expires_at), knowledge_documents (id, source_url, content, metadata, created_at), embeddings (id, document_id, vector, chunk_text, embedding_model), logs (id, session_id, request_data, response_data, created_at, expires_at). Add appropriate indexes including vector indexes for pgvector. Implement foreign key constraints and data validation rules.",
+            "details": "Design and implement schema tables: users (id, device_token, created_at), sessions (id, user_id, context_data, expires_at), knowledge_documents (id, source_url, content, metadata, created_at), embeddings (id, document_id, vector, chunk_text, embedding_model), logs (id, session_id, request_data, response_data, created_at, expires_at). Add appropriate indexes including vector indexes for pgvector. Implement foreign key constraints and data validation rules optimized for demo workload.",
             "status": "pending",
-            "testStrategy": "Validate schema creation and constraints. Test sample data insertion across all tables. Verify vector column functionality and indexing performance."
+            "testStrategy": "Validate schema creation and constraints. Test sample data insertion across all tables. Verify vector column functionality and indexing performance with demo data volume."
           },
           {
             "id": 3,
-            "title": "Configure RDS Proxy and connection pooling",
-            "description": "Set up RDS Proxy for connection pooling and configure optimal database connection management",
+            "title": "Configure direct database connections for demo scale",
+            "description": "Set up direct database connection management optimized for demo environment with 10 concurrent users",
             "dependencies": [
               2
             ],
-            "details": "Configure RDS Proxy to manage database connections efficiently. Set up connection pooling parameters for optimal performance under concurrent load. Configure authentication using IAM roles and secrets management. Set up target groups and health checks. Configure proxy settings for session pinning when needed for pgvector operations. Implement connection retry logic and failover configurations.",
+            "details": "Configure direct database connections without RDS Proxy for simplified demo architecture. Set up connection pooling within application services for optimal performance with 10 concurrent users. Configure connection parameters and timeouts appropriate for demo scale. Implement connection health checks and basic retry logic. Document connection configuration for both Lightsail managed and containerized deployment options.",
             "status": "pending",
-            "testStrategy": "Test connection pooling under various load scenarios. Verify authentication and authorization through RDS Proxy. Test failover and retry mechanisms."
+            "testStrategy": "Test connection performance under demo load scenarios. Verify connection pooling efficiency. Test connection recovery and retry mechanisms with 10 concurrent users."
           },
           {
             "id": 4,
-            "title": "Implement database migration system",
-            "description": "Create database migration framework for schema versioning and automated deployments",
+            "title": "Implement basic database migration system",
+            "description": "Create simple migration framework for schema versioning suitable for demo environment",
             "dependencies": [
               2
             ],
-            "details": "Implement migration system using tools like Flyway or custom solution for schema version control. Create initial migration files for all tables and indexes. Set up automated migration execution in CI/CD pipeline. Implement rollback capabilities for failed migrations. Create migration validation and testing procedures. Document migration best practices and procedures for future schema changes.",
+            "details": "Implement lightweight migration system using simple SQL scripts or basic migration tool suitable for demo deployment. Create initial migration files for all tables and indexes. Set up migration execution process that can be run during deployment or container startup. Implement basic validation for migration success. Document migration procedures for demo environment maintenance and updates.",
             "status": "pending",
-            "testStrategy": "Test migration execution and rollback scenarios. Validate migration versioning and dependency handling. Test automated deployment integration."
+            "testStrategy": "Test migration execution during deployment. Validate migration versioning and dependency handling. Test migration process with both deployment options."
           },
           {
             "id": 5,
-            "title": "Implement backup, restore procedures and TTL cleanup jobs",
-            "description": "Set up automated backup/restore procedures and implement TTL cleanup for logs table",
+            "title": "Implement basic backup procedures and TTL cleanup for demo",
+            "description": "Set up simple daily backup procedures and implement TTL cleanup for logs table appropriate for demo scale",
             "dependencies": [
               2
             ],
-            "details": "Configure automated daily backups with point-in-time recovery capability. Implement backup retention policies and cross-region replication if needed. Create restore procedures and documentation. Implement TTL cleanup job for logs table (24-hour retention) using scheduled Lambda function or database stored procedure. Set up monitoring and alerting for backup success/failure. Create disaster recovery runbooks and test procedures.",
+            "details": "Configure basic daily database backups appropriate for demo environment using either Lightsail managed backup features or simple backup scripts for containerized deployment. Implement TTL cleanup job for logs table (24-hour retention) using cron job or scheduled task within the application. Set up basic monitoring for backup success. Create simple restore procedures and documentation suitable for demo recovery scenarios.",
             "status": "pending",
-            "testStrategy": "Test backup creation and restore procedures. Verify TTL cleanup job execution and accuracy. Test disaster recovery scenarios and data integrity validation."
+            "testStrategy": "Test backup creation and basic restore procedures. Verify TTL cleanup job execution and accuracy with demo data. Test backup monitoring and alerting for demo environment."
           }
         ]
       },

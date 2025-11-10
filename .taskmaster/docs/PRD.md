@@ -95,22 +95,24 @@ Frontline and operations staff often need quick, reliable access to critical dat
 ## 9. Technical Architecture
 
 ### **Overview**
-- **Mobile Client:** Native iOS app only with wake-word listener + local VAD module (WebRTC-VAD or RNNoise).  
-- **Transport:**  
-  - Audio streaming via WebRTC data/audio channel.  
-  - Control messages via gRPC/HTTP2.  
-- **Backend (AWS ECS/Fargate):**  
-  - **Ingress Service:** handles audio chunks & session control.  
-  - **ASR Gateway:** streams to cloud ASR (e.g., Deepgram, Google, Azure).  
-  - **LLM Router:** routes to managed frontier model (OpenAI/Anthropic).  
-  - **RAG Service:** Postgres + pgvector retrieval with citation injection.  
-  - **TTS Service:** streams cloud neural TTS audio back to client.  
-  - **Logging Service:** minimal input/output JSON logs.  
-- **Data Storage:**  
-  - **Aurora Postgres** for users, logs, embeddings (pgvector).  
-  - No multi-tenancy; single-tenant MVP schema.  
-- **Authentication:**  
-  - Simple incognito or device token auth.  
+- **Mobile Client:** Native iOS app only with wake-word listener + local VAD module (WebRTC-VAD or RNNoise).
+- **Transport:**
+  - Audio streaming via WebRTC data/audio channel.
+  - Control messages via gRPC/HTTP2.
+- **Backend (AWS Lightsail):**
+  - **Single Lightsail Instance** ($12-20/month, 2GB RAM, 2 vCPU) running Docker Compose
+  - **Ingress Service:** handles audio chunks & session control.
+  - **ASR Gateway:** streams to cloud ASR (e.g., Deepgram, Google, Azure).
+  - **LLM Router:** routes to managed frontier model (OpenAI/Anthropic).
+  - **RAG Service:** Postgres + pgvector retrieval with citation injection.
+  - **TTS Service:** streams cloud neural TTS audio back to client.
+  - **Logging Service:** minimal input/output JSON logs.
+  - **Nginx Reverse Proxy:** routes requests to appropriate services.
+- **Data Storage:**
+  - **Lightsail Managed Postgres** ($15/month) or containerized Postgres for users, logs, embeddings (pgvector).
+  - No multi-tenancy; single-tenant MVP schema.
+- **Authentication:**
+  - Simple incognito or device token auth.
   - No SSO, no RBAC.  
 
 ---
@@ -159,11 +161,11 @@ Frontline and operations staff often need quick, reliable access to critical dat
 
 ## 13. Dependencies & Assumptions
 
-- Stable Wi-Fi connectivity.  
-- Access to public GitHub repositories & APIs.  
-- iOS devices with microphone and headset support.  
-- Frontier LLM API credentials available.  
-- Managed AWS infrastructure (ECS + Aurora) configured.  
+- Stable Wi-Fi connectivity.
+- Access to public GitHub repositories & APIs.
+- iOS devices with microphone and headset support.
+- Frontier LLM API credentials available.
+- AWS Lightsail instance with Docker Compose configured.  
 
 ---
 
