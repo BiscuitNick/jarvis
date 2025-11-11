@@ -43,8 +43,9 @@ class AudioManager: ObservableObject {
     }
 
     deinit {
-        unregisterAudioSessionNotifications()
-        deactivateAudioSession()
+        // Note: Cannot call MainActor-isolated methods from deinit
+        // NotificationCenter observers will be removed automatically
+        // Audio session will be deactivated automatically by the system
     }
 
     // MARK: - Audio Session Configuration
@@ -58,7 +59,6 @@ class AudioManager: ObservableObject {
                 mode: .voiceChat,
                 options: [
                     .defaultToSpeaker,
-                    .allowBluetooth,
                     .allowBluetoothA2DP,
                     .mixWithOthers
                 ]

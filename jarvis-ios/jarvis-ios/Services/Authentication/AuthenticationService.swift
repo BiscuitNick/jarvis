@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 import Security
 import LocalAuthentication
 import Combine
@@ -204,7 +205,7 @@ class AuthenticationService: ObservableObject {
 
     /// Refresh the device token
     func refreshDeviceToken() async throws -> String {
-        guard let existingToken = getDeviceToken() else {
+        guard getDeviceToken() != nil else {
             throw KeychainError.tokenNotFound
         }
 
