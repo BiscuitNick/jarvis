@@ -1,17 +1,19 @@
 /**
  * ASR Provider Pool
  * Manages a pool of ASR provider connections for efficient resource utilization
+ * Works with ProviderManager for provider selection and health tracking
  */
 
 import { EventEmitter } from 'node:events';
 import { ASRProvider } from '../providers/ASRProvider';
-import { AWSTranscribeProvider } from '../providers/AWSTranscribeProvider';
+import { ProviderManager } from '../providers/ProviderManager';
 
 export interface ProviderPoolConfig {
   maxPoolSize?: number;
   minPoolSize?: number;
   acquireTimeout?: number;
   idleTimeout?: number;
+  providerManager?: ProviderManager;
   providerType?: 'aws' | 'deepgram' | 'google' | 'azure';
   providerRegion?: string;
 }
@@ -19,17 +21,19 @@ export interface ProviderPoolConfig {
 interface PooledProvider {
   id: string;
   provider: ASRProvider;
+  providerName: string;
   inUse: boolean;
   createdAt: number;
   lastUsed: number;
   usageCount: number;
+  startTime?: number; // Track when provider started processing
 }
 
 export class ASRProviderPool extends EventEmitter {
   private pool: PooledProvider[] = [];
-  private config: Required<ProviderPoolConfig>;
+  private config: Omit<Required<ProviderPoolConfig>, 'providerManager'> & { providerManager?: ProviderManager };
   private idleCheckInterval?: NodeJS.Timeout;
-  private providerFactory: () => ASRProvider;
+  private providerManager?: ProviderManager;
 
   constructor(config: ProviderPoolConfig = {}) {
     super();
@@ -41,10 +45,10 @@ export class ASRProviderPool extends EventEmitter {
       idleTimeout: config.idleTimeout || 60000, // 1 minute
       providerType: config.providerType || 'aws',
       providerRegion: config.providerRegion || 'us-east-1',
+      providerManager: config.providerManager,
     };
 
-    // Set up provider factory based on type
-    this.providerFactory = this.createProviderFactory();
+    this.providerManager = config.providerManager;
 
     // Initialize minimum pool size
     this.initializePool();
@@ -56,7 +60,7 @@ export class ASRProviderPool extends EventEmitter {
   /**
    * Acquire a provider from the pool
    */
-  async acquire(): Promise<{ id: string; provider: ASRProvider }> {
+  async acquire(): Promise<{ id: string; provider: ASRProvider; providerName: string }> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < this.config.acquireTimeout) {
@@ -66,27 +70,35 @@ export class ASRProviderPool extends EventEmitter {
       if (available) {
         available.inUse = true;
         available.lastUsed = Date.now();
+        available.startTime = Date.now();
         available.usageCount++;
 
-        this.emit('provider:acquired', { id: available.id });
+        this.emit('provider:acquired', { id: available.id, providerName: available.providerName });
 
         return {
           id: available.id,
           provider: available.provider,
+          providerName: available.providerName,
         };
       }
 
       // If pool is not at max size, create a new provider
       if (this.pool.length < this.config.maxPoolSize) {
         const pooled = this.createPooledProvider();
+        if (!pooled) {
+          throw new Error('No healthy providers available');
+        }
+
         pooled.inUse = true;
+        pooled.startTime = Date.now();
         this.pool.push(pooled);
 
-        this.emit('provider:created', { id: pooled.id });
+        this.emit('provider:created', { id: pooled.id, providerName: pooled.providerName });
 
         return {
           id: pooled.id,
           provider: pooled.provider,
+          providerName: pooled.providerName,
         };
       }
 
@@ -102,7 +114,7 @@ export class ASRProviderPool extends EventEmitter {
   /**
    * Release a provider back to the pool
    */
-  release(providerId: string): void {
+  release(providerId: string, success: boolean = true, confidence?: number): void {
     const pooled = this.pool.find((p) => p.id === providerId);
 
     if (!pooled) {
@@ -111,15 +123,29 @@ export class ASRProviderPool extends EventEmitter {
     }
 
     pooled.inUse = false;
-    pooled.lastUsed = Date.now();
+    const endTime = Date.now();
+    pooled.lastUsed = endTime;
 
-    this.emit('provider:released', { id: providerId });
+    // Calculate latency if startTime was set
+    const latency = pooled.startTime ? endTime - pooled.startTime : undefined;
+    pooled.startTime = undefined;
+
+    // Record metrics with ProviderManager if available
+    if (this.providerManager && success) {
+      this.providerManager.recordSuccess(pooled.providerName, confidence, latency);
+    }
+
+    this.emit('provider:released', {
+      id: providerId,
+      providerName: pooled.providerName,
+      latency
+    });
   }
 
   /**
    * Remove a provider from the pool (e.g., if it failed)
    */
-  async remove(providerId: string): Promise<void> {
+  async remove(providerId: string, error?: Error): Promise<void> {
     const index = this.pool.findIndex((p) => p.id === providerId);
 
     if (index === -1) {
@@ -128,16 +154,21 @@ export class ASRProviderPool extends EventEmitter {
 
     const pooled = this.pool[index];
 
+    // Record error with ProviderManager if available
+    if (this.providerManager && error) {
+      this.providerManager.recordError(pooled.providerName, error);
+    }
+
     // Clean up provider resources
     try {
       await pooled.provider.endStream();
-    } catch (error) {
-      console.error(`[ASRProviderPool] Error ending stream for provider ${providerId}:`, error);
+    } catch (cleanupError) {
+      console.error(`[ASRProviderPool] Error ending stream for provider ${providerId}:`, cleanupError);
     }
 
     this.pool.splice(index, 1);
 
-    this.emit('provider:removed', { id: providerId });
+    this.emit('provider:removed', { id: providerId, providerName: pooled.providerName });
 
     // Ensure minimum pool size
     if (this.pool.length < this.config.minPoolSize) {
@@ -216,36 +247,43 @@ export class ASRProviderPool extends EventEmitter {
   /**
    * Private: Create a pooled provider instance
    */
-  private createPooledProvider(): PooledProvider {
+  private createPooledProvider(): PooledProvider | null {
+    // Get provider from ProviderManager if available
+    let provider: ASRProvider | null = null;
+    let providerName: string;
+
+    if (this.providerManager) {
+      provider = this.providerManager.getActiveProvider();
+      providerName = this.providerManager.getActiveProviderName() || 'unknown';
+
+      if (!provider) {
+        console.error('[ASRProviderPool] No active provider available from ProviderManager');
+        return null;
+      }
+    } else {
+      // Fallback to simple provider creation (backward compatibility)
+      const { providerType, providerRegion } = this.config;
+      const AWSTranscribeProvider = require('../providers/AWSTranscribeProvider').AWSTranscribeProvider;
+
+      switch (providerType) {
+        case 'aws':
+          provider = new AWSTranscribeProvider(providerRegion);
+          providerName = 'AWS Transcribe';
+          break;
+        default:
+          throw new Error(`Unsupported provider type: ${providerType}`);
+      }
+    }
+
     return {
       id: this.generateProviderId(),
-      provider: this.providerFactory(),
+      provider,
+      providerName,
       inUse: false,
       createdAt: Date.now(),
       lastUsed: Date.now(),
       usageCount: 0,
     };
-  }
-
-  /**
-   * Private: Create provider factory based on configuration
-   */
-  private createProviderFactory(): () => ASRProvider {
-    const { providerType, providerRegion } = this.config;
-
-    switch (providerType) {
-      case 'aws':
-        return () => new AWSTranscribeProvider(providerRegion);
-      // Future providers can be added here
-      // case 'deepgram':
-      //   return () => new DeepgramProvider(config);
-      // case 'google':
-      //   return () => new GoogleSpeechProvider(config);
-      // case 'azure':
-      //   return () => new AzureSpeechProvider(config);
-      default:
-        throw new Error(`Unsupported provider type: ${providerType}`);
-    }
   }
 
   /**
