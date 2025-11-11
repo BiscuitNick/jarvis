@@ -1,4 +1,6 @@
 import express from 'express';
+import { Server as HTTPServer } from 'http';
+import { WebSocketServer } from 'ws';
 import { getPool, connectWithRetry, closePool } from './db/pool';
 import { httpLogger, logger } from './utils/logger';
 import { register as metricsRegister, httpRequestDuration } from './utils/metrics';
@@ -6,10 +8,17 @@ import MediaServer from './webrtc/MediaServer';
 import { createGrpcServer } from './grpc/sessionService';
 import { rateLimit } from './auth/middleware';
 
+// Import orchestration components
+import { PipelineOrchestrator } from './orchestration/PipelineOrchestrator';
+import { InterruptionHandler } from './orchestration/InterruptionHandler';
+import { LatencyMonitor } from './orchestration/LatencyMonitor';
+import { StreamingHandler } from './routes/streaming';
+
 // Import routes
 import authRoutes from './routes/auth';
 import sessionRoutes from './routes/session';
 import webrtcRoutes from './routes/webrtc';
+import orchestrationRoutes, { initializeOrchestration } from './routes/orchestration';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -17,6 +26,10 @@ const GRPC_PORT = parseInt(process.env.GRPC_PORT || '50051', 10);
 
 let isDraining = false;
 let grpcServer: any;
+let orchestrator: PipelineOrchestrator;
+let interruptionHandler: InterruptionHandler;
+let latencyMonitor: LatencyMonitor;
+let streamingHandler: StreamingHandler;
 
 // Middleware
 app.use(express.json());
@@ -95,8 +108,10 @@ app.get('/', (req, res) => {
 app.use('/api/auth', rateLimit(100, 60000), authRoutes);
 app.use('/api/session', rateLimit(200, 60000), sessionRoutes);
 app.use('/api/webrtc', rateLimit(500, 60000), webrtcRoutes);
+app.use('/api/orchestration', rateLimit(500, 60000), orchestrationRoutes);
 
-let server: any;
+let server: HTTPServer;
+let wss: WebSocketServer;
 
 async function start() {
   try {
@@ -109,11 +124,42 @@ async function start() {
     await mediaServer.initialize();
     logger.info('MediaServer initialized');
 
-    // Set up audio chunk handler (forward to ASR gateway)
+    // Initialize orchestration layer
+    const orchestratorConfig = {
+      asrGatewayUrl: process.env.ASR_GATEWAY_URL || 'http://asr-gateway:3001',
+      llmRouterUrl: process.env.LLM_ROUTER_URL || 'http://llm-router:3003',
+      ragServiceUrl: process.env.RAG_SERVICE_URL || 'http://rag-service:3002',
+      ttsServiceUrl: process.env.TTS_SERVICE_URL || 'http://tts-service:3004',
+      maxLatencyMs: parseInt(process.env.MAX_LATENCY_MS || '10000', 10),
+      enableStreaming: true,
+    };
+
+    orchestrator = new PipelineOrchestrator(orchestratorConfig);
+    logger.info({ config: orchestratorConfig }, 'PipelineOrchestrator initialized');
+
+    // Initialize interruption handler
+    interruptionHandler = new InterruptionHandler(orchestrator, {
+      vadThreshold: parseFloat(process.env.VAD_THRESHOLD || '0.7'),
+      vadDurationMs: parseInt(process.env.VAD_DURATION_MS || '150', 10),
+      cooldownMs: parseInt(process.env.INTERRUPTION_COOLDOWN_MS || '1000', 10),
+    });
+    logger.info('InterruptionHandler initialized');
+
+    // Initialize latency monitor
+    latencyMonitor = new LatencyMonitor({
+      firstToken: parseInt(process.env.FIRST_TOKEN_LATENCY_MS || '500', 10),
+      endToEnd: parseInt(process.env.END_TO_END_LATENCY_MS || '2000', 10),
+    });
+    logger.info('LatencyMonitor initialized');
+
+    // Initialize orchestration routes
+    initializeOrchestration(orchestrator, interruptionHandler, latencyMonitor);
+
+    // Set up audio chunk handler to forward through orchestrator
     mediaServer.onAudioChunk(async (chunk) => {
       logger.debug({ sessionId: chunk.sessionId, size: chunk.data.length }, 'Audio chunk received');
-      // TODO: Forward to ASR gateway service
-      // This will be implemented when integrating with asr-gateway
+      // Audio will be forwarded through the orchestrator's pipeline
+      // This integration will be enhanced based on the WebSocket streaming handler
     });
 
     // Start gRPC server
@@ -126,6 +172,20 @@ async function start() {
       logger.info({ healthCheck: `http://localhost:${PORT}/healthz` }, 'Service endpoints ready');
       logger.info({ metrics: `http://localhost:${PORT}/metrics` }, 'Metrics available');
     });
+
+    // Initialize WebSocket server for streaming
+    wss = new WebSocketServer({ server, path: '/stream' });
+    streamingHandler = new StreamingHandler(orchestrator, interruptionHandler, latencyMonitor);
+
+    wss.on('connection', (ws, req) => {
+      streamingHandler.handleConnection(ws, req);
+    });
+
+    logger.info('WebSocket server initialized on /stream');
+
+    // Check health of downstream services
+    const health = await orchestrator.healthCheck();
+    logger.info({ health }, 'Downstream services health check');
   } catch (error) {
     logger.error({ error }, 'Failed to start service');
     process.exit(1);
@@ -144,6 +204,12 @@ async function shutdown(signal: string) {
 
   try {
     // Stop accepting new connections
+    if (wss) {
+      wss.close(() => {
+        logger.info('WebSocket server closed');
+      });
+    }
+
     if (server) {
       await new Promise<void>((resolve) => {
         server.close(() => {
@@ -161,6 +227,23 @@ async function shutdown(signal: string) {
           resolve();
         });
       });
+    }
+
+    // Shutdown orchestration components
+    if (streamingHandler) {
+      streamingHandler.shutdown();
+    }
+
+    if (orchestrator) {
+      await orchestrator.shutdown();
+    }
+
+    if (interruptionHandler) {
+      interruptionHandler.shutdown();
+    }
+
+    if (latencyMonitor) {
+      latencyMonitor.shutdown();
     }
 
     // Shutdown MediaServer
