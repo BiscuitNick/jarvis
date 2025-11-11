@@ -122,8 +122,10 @@ export class AzureSpeechProvider implements ASRProvider {
       throw new Error('Stream not active');
     }
 
-    // Push audio chunk to the stream
-    this.pushStream.write(audioChunk);
+    // Push audio chunk to the stream (Azure SDK expects ArrayBuffer)
+    // Convert Buffer to ArrayBuffer by creating a new one
+    const arrayBuffer = audioChunk.buffer.slice(audioChunk.byteOffset, audioChunk.byteOffset + audioChunk.byteLength) as ArrayBuffer;
+    this.pushStream.write(arrayBuffer);
   }
 
   async endStream(): Promise<void> {

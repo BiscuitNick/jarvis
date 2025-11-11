@@ -226,7 +226,9 @@ export class ASRProviderPool extends EventEmitter {
   private initializePool(): void {
     for (let i = 0; i < this.config.minPoolSize; i++) {
       const pooled = this.createPooledProvider();
-      this.pool.push(pooled);
+      if (pooled) {
+        this.pool.push(pooled);
+      }
     }
 
     this.emit('pool:initialized', { size: this.config.minPoolSize });
@@ -240,7 +242,9 @@ export class ASRProviderPool extends EventEmitter {
 
     for (let i = 0; i < toCreate; i++) {
       const pooled = this.createPooledProvider();
-      this.pool.push(pooled);
+      if (pooled) {
+        this.pool.push(pooled);
+      }
     }
   }
 
@@ -249,17 +253,18 @@ export class ASRProviderPool extends EventEmitter {
    */
   private createPooledProvider(): PooledProvider | null {
     // Get provider from ProviderManager if available
-    let provider: ASRProvider | null = null;
+    let provider: ASRProvider;
     let providerName: string;
 
     if (this.providerManager) {
-      provider = this.providerManager.getActiveProvider();
+      const activeProvider = this.providerManager.getActiveProvider();
       providerName = this.providerManager.getActiveProviderName() || 'unknown';
 
-      if (!provider) {
+      if (!activeProvider) {
         console.error('[ASRProviderPool] No active provider available from ProviderManager');
         return null;
       }
+      provider = activeProvider;
     } else {
       // Fallback to simple provider creation (backward compatibility)
       const { providerType, providerRegion } = this.config;

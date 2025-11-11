@@ -353,7 +353,7 @@ wss.on('connection', (ws: WebSocket) => {
 
             // Get session stats to calculate average confidence
             const stats = transcriptionProcessor.getSessionStats(sessionId);
-            const avgConfidence = stats.averageConfidence;
+            const avgConfidence = stats?.averageConfidence ?? 0;
 
             providerPool.release(providerId, true, avgConfidence);
             provider = null;
@@ -448,7 +448,7 @@ wss.on('connection', (ws: WebSocket) => {
 
       // Get session stats for provider health tracking
       const stats = transcriptionProcessor.getSessionStats(sessionId);
-      providerPool.release(providerId, true, stats.averageConfidence);
+      providerPool.release(providerId, true, stats?.averageConfidence ?? 0);
       provider = null;
       providerId = null;
     }

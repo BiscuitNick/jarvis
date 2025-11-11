@@ -70,10 +70,11 @@ export class DeepgramProvider implements ASRProvider {
         this.isStreaming = false;
       });
 
-      // Handle warnings
-      this.liveClient.on(LiveTranscriptionEvents.Warning, (warning: any) => {
-        console.warn('[DeepgramProvider] Warning:', warning);
-      });
+      // Handle warnings (if available in SDK version)
+      // Note: Warning event may not be available in all SDK versions
+      // this.liveClient.on(LiveTranscriptionEvents.Warning, (warning: any) => {
+      //   console.warn('[DeepgramProvider] Warning:', warning);
+      // });
 
       // Handle metadata
       this.liveClient.on(LiveTranscriptionEvents.Metadata, (metadata: any) => {
@@ -91,8 +92,9 @@ export class DeepgramProvider implements ASRProvider {
       throw new Error('Stream not active');
     }
 
-    // Send audio chunk to Deepgram
-    this.liveClient.send(audioChunk);
+    // Send audio chunk to Deepgram (convert Buffer to ArrayBuffer)
+    const arrayBuffer = audioChunk.buffer.slice(audioChunk.byteOffset, audioChunk.byteOffset + audioChunk.byteLength) as ArrayBuffer;
+    this.liveClient.send(arrayBuffer);
   }
 
   async endStream(): Promise<void> {
