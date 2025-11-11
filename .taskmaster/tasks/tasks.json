@@ -542,7 +542,7 @@
         "dependencies": [
           "6"
         ],
-        "status": "done",
+        "status": "pending",
         "subtasks": [
           {
             "id": 1,
@@ -859,7 +859,7 @@
         "dependencies": [
           "9"
         ],
-        "status": "done",
+        "status": "pending",
         "subtasks": [
           {
             "id": 1,
@@ -928,9 +928,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2025-11-11T03:21:04.118Z",
+      "lastModified": "2025-11-11T03:23:45.470Z",
       "taskCount": 10,
-      "completedCount": 8,
+      "completedCount": 6,
       "tags": [
         "master"
       ]
