@@ -225,6 +225,7 @@ struct StatusRow: View {
         audioManager: AudioManager(),
         webRTCClient: WebRTCClient(),
         grpcClient: GRPCClient(),
-        authService: AuthenticationService()
+        authService: AuthenticationService(),
+        speechRecognitionManager: SpeechRecognitionManager()
     ))
 }

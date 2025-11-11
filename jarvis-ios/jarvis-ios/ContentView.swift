@@ -16,12 +16,14 @@ struct ContentView: View {
         let webRTCClient = WebRTCClient()
         let grpcClient = GRPCClient()
         let authService = AuthenticationService()
+        let speechRecognitionManager = SpeechRecognitionManager()
 
         _viewModel = StateObject(wrappedValue: VoiceAssistantViewModel(
             audioManager: audioManager,
             webRTCClient: webRTCClient,
             grpcClient: grpcClient,
-            authService: authService
+            authService: authService,
+            speechRecognitionManager: speechRecognitionManager
         ))
     }
 

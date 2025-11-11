@@ -78,7 +78,7 @@ class VoiceAssistantViewModel: ObservableObject {
         webRTCClient: WebRTCClient,
         grpcClient: GRPCClient,
         authService: AuthenticationService,
-        speechRecognitionManager: SpeechRecognitionManager = SpeechRecognitionManager()
+        speechRecognitionManager: SpeechRecognitionManager
     ) {
         self.audioManager = audioManager
         self.webRTCClient = webRTCClient
@@ -343,12 +343,14 @@ class VoiceAssistantViewModel: ObservableObject {
     // MARK: - Session Management
 
     func startSession(
-        audioConfig: AudioConfig = .default,
-        voiceConfig: VoiceConfig = .default
+        audioConfig: AudioConfig? = nil,
+        voiceConfig: VoiceConfig? = nil
     ) async throws {
+        let finalAudioConfig = audioConfig ?? .default
+        let finalVoiceConfig = voiceConfig ?? .default
         let response = try await grpcClient.startSession(
-            audioConfig: audioConfig,
-            voiceConfig: voiceConfig,
+            audioConfig: finalAudioConfig,
+            voiceConfig: finalVoiceConfig,
             metadata: [
                 "platform": "ios",
                 "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
@@ -359,7 +361,7 @@ class VoiceAssistantViewModel: ObservableObject {
             print("✅ Session started: \(sessionId)")
 
             // Start WebRTC connection with offer from backend
-            if let webrtcOffer = response.webrtcOffer {
+            if response.webrtcOffer != nil {
                 // TODO: Use the WebRTC offer to establish connection
                 print("📡 Received WebRTC offer")
             }

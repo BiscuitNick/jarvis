@@ -156,18 +156,6 @@ class SpeechRecognitionManager: ObservableObject {
         print("🔄 Recognition mode: \(onDevice ? "on-device" : "cloud")")
     }
 
-    /// Get detailed word-level information with confidence scores
-    func getDetailedTranscription() -> [(word: String, confidence: Float, timestamp: TimeInterval)]? {
-        guard let task = recognitionTask,
-              let result = task.result else {
-            return nil
-        }
-
-        return result.bestTranscription.segments.map { segment in
-            (word: segment.substring, confidence: segment.confidence, timestamp: segment.timestamp)
-        }
-    }
-
     enum SpeechRecognitionError: Error {
         case recognitionRequestFailed
         case audioEngineNotAvailable
