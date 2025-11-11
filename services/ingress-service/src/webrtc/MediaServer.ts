@@ -84,7 +84,12 @@ export class MediaServer {
   /**
    * Create a WebRTC transport for a session
    */
-  public async createWebRtcTransport(sessionId: string): Promise<mediasoupTypes.WebRtcTransportOptions> {
+  public async createWebRtcTransport(sessionId: string): Promise<{
+    id: string;
+    iceParameters: mediasoupTypes.IceParameters;
+    iceCandidates: mediasoupTypes.IceCandidate[];
+    dtlsParameters: mediasoupTypes.DtlsParameters;
+  }> {
     if (!this.router) {
       throw new Error('Router not initialized');
     }
@@ -203,10 +208,8 @@ export class MediaServer {
 
       this.dataProducers.set(sessionId, dataProducer);
 
-      // Handle incoming audio data
-      dataProducer.on('message', (message) => {
-        this.handleAudioData(sessionId, message);
-      });
+      // DataProducers send data, they don't receive it
+      // Audio data will be handled through the transport's data channels
 
       dataProducer.on('transportclose', () => {
         logger.debug({ sessionId, dataProducerId: dataProducer.id }, 'DataProducer transport closed');

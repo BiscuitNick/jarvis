@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { getPool } from '../db/pool';
@@ -52,13 +52,13 @@ export async function generateDeviceToken(deviceIdentifier: string): Promise<{ u
     const accessToken = jwt.sign(
       { userId, deviceToken, type: 'access' } as DeviceTokenPayload,
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
     );
 
     const refreshToken = jwt.sign(
       { userId, deviceToken, type: 'refresh' } as DeviceTokenPayload,
       JWT_SECRET,
-      { expiresIn: REFRESH_TOKEN_EXPIRES_IN }
+      { expiresIn: REFRESH_TOKEN_EXPIRES_IN } as jwt.SignOptions
     );
 
     return { userId, deviceToken, accessToken, refreshToken };
@@ -107,7 +107,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
     const accessToken = jwt.sign(
       { userId: decoded.userId, deviceToken: decoded.deviceToken, type: 'access' } as DeviceTokenPayload,
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
     );
 
     return { accessToken };

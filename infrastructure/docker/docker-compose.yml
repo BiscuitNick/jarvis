@@ -10,7 +10,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-jarvis}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password required}
-      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=vector"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -124,11 +123,16 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${ASR_PORT:-3001}
-      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:?Deepgram API key required}
+      # AWS Transcribe configuration (primary provider)
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      # Alternative ASR providers (optional)
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
       GOOGLE_CLOUD_CREDENTIALS: ${GOOGLE_CLOUD_CREDENTIALS:-}
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
       AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-}
-      PRIMARY_ASR_PROVIDER: ${PRIMARY_ASR_PROVIDER:-deepgram}
+      PRIMARY_ASR_PROVIDER: ${PRIMARY_ASR_PROVIDER:-aws}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "3001:3001"

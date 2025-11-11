@@ -8,17 +8,27 @@ WORKDIR /app
 # Install build dependencies for mediasoup (native addon)
 RUN apk add --no-cache \
     python3 \
+    py3-pip \
     make \
     g++ \
     gcc \
-    linux-headers
+    linux-headers \
+    libc6-compat
+
+# Set environment variables to optimize mediasoup build
+ENV MEDIASOUP_SKIP_WORKER_PREBUILT_DOWNLOAD="false"
+ENV MEDIASOUP_WORKER_BIN="/app/node_modules/mediasoup/worker/out/Release/mediasoup-worker"
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV JOBS="2"
 
 # Copy package files
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies (including native addons)
-RUN npm ci --only=production=false
+# Install dependencies with memory optimization
+# Split installation to reduce peak memory usage
+RUN npm install && \
+    npm cache clean --force
 
 # Copy source code and proto files
 COPY src ./src
@@ -35,17 +45,14 @@ WORKDIR /app
 # Install runtime dependencies for mediasoup
 RUN apk add --no-cache \
     python3 \
-    make \
-    g++ \
-    gcc \
-    linux-headers
+    py3-pip \
+    libc6-compat
 
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only (including native addons)
-RUN npm ci --only=production && \
-    npm cache clean --force
+# Copy node_modules from builder to avoid rebuilding native modules
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
