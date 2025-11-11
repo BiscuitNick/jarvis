@@ -26,6 +26,7 @@ class SpeechRecognitionManager: ObservableObject {
     // Configuration
     private var useOnDeviceRecognition = true // Toggle based on privacy preference
     private let bufferSize: AVAudioFrameCount = 1024
+    private var isManualStop = false // Track if stop was initiated by user
 
     // Callback for sending transcripts to backend
     var onTranscript: ((String, Bool) -> Void)?
@@ -46,6 +47,15 @@ class SpeechRecognitionManager: ObservableObject {
     /// Start continuous speech recognition
     /// Note: On-device recognition has 1-minute limit, will need to restart
     func startRecognition() throws {
+        print("🎤 SpeechRecognitionManager.startRecognition() called")
+
+        // Clear previous transcripts to start fresh
+        print("   Clearing previous transcripts...")
+        currentTranscript = ""
+        finalTranscript = ""
+        recognitionError = nil
+        isManualStop = false // Reset flag for new session
+
         // Cancel any existing task
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -55,19 +65,24 @@ class SpeechRecognitionManager: ObservableObject {
             audioEngine.stop()
         }
 
-        // Remove any existing tap (ignore if none exists)
+        // Remove any existing tap before installing new one
         let inputNode = audioEngine.inputNode
+        // removeTap is safe to call even if no tap exists
         inputNode.removeTap(onBus: 0)
 
-        // Configure audio session ONLY if not already active
-        // This prevents conflicting with AudioManager's configuration
+        // Use AudioManager's existing audio session configuration
+        // DO NOT reconfigure the session - it causes Error 1101
+        // AudioManager already set up .playAndRecord with .voiceChat mode
+        print("📱 Using existing audio session configuration")
+
+        // Verify audio session is active
         let audioSession = AVAudioSession.sharedInstance()
-        if !audioSession.isOtherAudioPlaying && audioSession.category != .playAndRecord {
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        } else {
-            // Use existing session configuration
-            print("📱 Using existing audio session configuration")
+        if !audioSession.isOtherAudioPlaying {
+            do {
+                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            } catch {
+                print("⚠️ Could not activate audio session: \(error)")
+            }
         }
 
         // Create recognition request
@@ -98,6 +113,7 @@ class SpeechRecognitionManager: ObservableObject {
             Task { @MainActor in
                 if let result = result {
                     self.currentTranscript = result.bestTranscription.formattedString
+                    print("📢 Speech result: '\(self.currentTranscript)' (isFinal: \(result.isFinal))")
 
                     // Send partial transcript to backend
                     self.onTranscript?(self.currentTranscript, result.isFinal)
@@ -108,17 +124,33 @@ class SpeechRecognitionManager: ObservableObject {
                     }
                 }
 
+                var shouldCleanup = false
                 if let error = error {
-                    self.recognitionError = error.localizedDescription
-                    print("❌ Recognition error: \(error)")
+                    let nsError = error as NSError
 
-                    // Handle 1-minute timeout for on-device recognition
-                    if self.useOnDeviceRecognition {
-                        self.handleOnDeviceTimeout()
+                    // Filter out error 1101 logging (it's a spurious error we can ignore)
+                    if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1101 {
+                        print("⚠️ Ignoring spurious speech recognition error 1101 (continuing recognition)")
+                        // Don't cleanup for this error - it's spurious and recognition can continue
+                    } else if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1110 {
+                        // Error 1110 = "No speech detected"
+                        // This happens after stopping recording - don't auto-restart if it was a manual stop
+                        print("ℹ️ No speech detected (error 1110)")
+                        if !self.isManualStop && self.useOnDeviceRecognition {
+                            print("⏱️ Auto-restarting due to timeout (not a manual stop)")
+                            self.handleOnDeviceTimeout()
+                        } else {
+                            print("✋ Manual stop detected - not auto-restarting")
+                            shouldCleanup = true
+                        }
+                    } else {
+                        self.recognitionError = error.localizedDescription
+                        print("❌ Recognition error: \(error)")
+                        shouldCleanup = true
                     }
                 }
 
-                if error != nil || result?.isFinal == true {
+                if shouldCleanup || result?.isFinal == true {
                     // Stop engine first
                     if self.audioEngine.isRunning {
                         self.audioEngine.stop()
@@ -147,6 +179,9 @@ class SpeechRecognitionManager: ObservableObject {
     }
 
     func stopRecognition() {
+        // Mark as manual stop to prevent auto-restart
+        isManualStop = true
+
         // End audio for the recognition request first
         recognitionRequest?.endAudio()
 
@@ -159,6 +194,7 @@ class SpeechRecognitionManager: ObservableObject {
         }
 
         // Remove tap AFTER engine is stopped
+        // removeTap is safe to call even if no tap exists
         audioEngine.inputNode.removeTap(onBus: 0)
 
         // Clean up
@@ -166,7 +202,7 @@ class SpeechRecognitionManager: ObservableObject {
         recognitionRequest = nil
 
         isRecognizing = false
-        print("🛑 Speech recognition stopped")
+        print("🛑 Speech recognition stopped (manual)")
     }
 
     /// Handle the 1-minute timeout for on-device recognition

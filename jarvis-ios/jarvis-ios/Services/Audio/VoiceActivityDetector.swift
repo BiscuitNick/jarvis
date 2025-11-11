@@ -15,6 +15,7 @@ class VoiceActivityDetector: ObservableObject {
     @Published var isVoiceActive = false
     @Published var energyLevel: Float = 0.0
     @Published var latencyMs: Double = 0.0
+    @Published var isDetecting = false
 
     // VAD Configuration
     private let chunkSize: AVAudioFrameCount = 960 // 20ms at 48kHz
@@ -22,7 +23,6 @@ class VoiceActivityDetector: ObservableObject {
     private let zeroCrossingRateThreshold: Float = 0.1
     private let hangoverFrames = 10 // Frames to wait before marking silence
     private var hangoverCount = 0
-    private var isActive = false
 
     // Audio processing
     private let audioEngine = AVAudioEngine()
@@ -62,13 +62,13 @@ class VoiceActivityDetector: ObservableObject {
         }
 
         try audioEngine.start()
-        isActive = true
+        isDetecting = true
     }
 
     func stopDetection() {
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
-        isActive = false
+        isDetecting = false
         isVoiceActive = false
         hangoverCount = 0
     }

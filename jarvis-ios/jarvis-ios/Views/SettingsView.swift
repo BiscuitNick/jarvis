@@ -51,11 +51,31 @@ struct SettingsView: View {
 
                 // Audio Features Section
                 Section("Audio Features") {
-                    Toggle("Wake Word Detection", isOn: .constant(viewModel.wakeWordEnabled))
-                        .disabled(true) // Show status only
+                    Toggle("Wake Word Detection", isOn: Binding(
+                        get: { viewModel.wakeWordEnabled },
+                        set: { newValue in
+                            if newValue {
+                                Task {
+                                    await viewModel.startWakeWordDetection()
+                                }
+                            } else {
+                                viewModel.stopWakeWordDetection()
+                            }
+                        }
+                    ))
 
-                    Toggle("Voice Activity Detection", isOn: .constant(viewModel.voiceActivityDetected))
-                        .disabled(true) // Show status only
+                    Toggle("Voice Activity Detection", isOn: Binding(
+                        get: { viewModel.vadEnabled },
+                        set: { newValue in
+                            if newValue {
+                                viewModel.startVAD()
+                            } else {
+                                viewModel.stopVAD()
+                            }
+                        }
+                    ))
+
+                    Toggle("Audio Visualization", isOn: $viewModel.audioVisualizationEnabled)
 
                     if viewModel.vadLatency > 0 {
                         HStack {
@@ -84,29 +104,6 @@ struct SettingsView: View {
                             Text(viewModel.sessionStatus)
                                 .foregroundColor(.secondary)
                         }
-                    }
-                }
-
-                // Test Features Section
-                Section("Test Features") {
-                    Button {
-                        Task {
-                            await viewModel.startWakeWordDetection()
-                        }
-                    } label: {
-                        Label("Test Wake Word Detection", systemImage: "waveform.and.mic")
-                    }
-
-                    Button {
-                        viewModel.startVAD()
-                    } label: {
-                        Label("Test Voice Activity Detection", systemImage: "waveform")
-                    }
-
-                    Button {
-                        viewModel.simulateAudioAmplitudes()
-                    } label: {
-                        Label("Test Audio Visualization", systemImage: "waveform.path.ecg")
                     }
                 }
 

@@ -60,13 +60,15 @@ struct ContentView: View {
                     .padding(.top, 8)
 
                     // Waveform Visualization
-                    WaveformView(
-                        amplitudes: viewModel.audioAmplitudes,
-                        isActive: viewModel.audioStreamActive || viewModel.isListening
-                    )
-                    .frame(height: 80)
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
+                    if viewModel.audioVisualizationEnabled {
+                        WaveformView(
+                            amplitudes: viewModel.audioAmplitudes,
+                            isActive: viewModel.audioStreamActive || viewModel.isListening
+                        )
+                        .frame(height: 80)
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                    }
 
                     // Transcript Area
                     TranscriptView(
@@ -87,7 +89,8 @@ struct ContentView: View {
                         action: {
                             if viewModel.isListening {
                                 viewModel.stopListening()
-                                viewModel.addUserMessage(viewModel.transcript)
+                                // Note: Message is already added by the speech recognition callback
+                                // when the transcript is final, so we don't add it again here
 
                                 // Simulate assistant response for testing
                                 Task {

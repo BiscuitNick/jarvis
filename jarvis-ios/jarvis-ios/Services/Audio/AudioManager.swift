@@ -14,6 +14,7 @@ class AudioManager: ObservableObject {
     @Published var isRecording = false
     @Published var audioLevel: Float = 0.0
     @Published var wakeWordEnabled = false
+    @Published var vadEnabled = false
     @Published var voiceActivityDetected = false
     @Published var vadLatency: Double = 0.0
     @Published var audioRouteDescription = "Unknown"
@@ -284,6 +285,12 @@ class AudioManager: ObservableObject {
         wakeWordDetector.$isListening
             .sink { [weak self] listening in
                 self?.wakeWordEnabled = listening
+            }
+            .store(in: &cancellables)
+
+        voiceActivityDetector.$isDetecting
+            .sink { [weak self] detecting in
+                self?.vadEnabled = detecting
             }
             .store(in: &cancellables)
 

@@ -45,9 +45,11 @@ class VoiceAssistantViewModel: ObservableObject {
     @Published var isListening = false
     @Published var wakeWordDetected = false
     @Published var wakeWordEnabled = false
+    @Published var vadEnabled = false
     @Published var voiceActivityDetected = false
     @Published var vadLatency: Double = 0.0
     @Published var audioAmplitudes: [Float] = Array(repeating: 0.1, count: 50)
+    @Published var audioVisualizationEnabled = true
     @Published var webRTCConnected = false
     @Published var audioStreamActive = false
     @Published var bytesSent: Int64 = 0
@@ -72,6 +74,7 @@ class VoiceAssistantViewModel: ObservableObject {
     let speechRecognitionManager: SpeechRecognitionManager
 
     private var cancellables = Set<AnyCancellable>()
+    private var currentTranscriptAdded = false // Track if current transcript was added to messages
 
     init(
         audioManager: AudioManager,
@@ -91,8 +94,8 @@ class VoiceAssistantViewModel: ObservableObject {
            let mode = RecognitionMode(rawValue: savedMode) {
             self.recognitionMode = mode
         } else {
-            // Default to standard mode for best balance
-            self.recognitionMode = .standardMode
+            // Default to privacy mode for best privacy and reliability
+            self.recognitionMode = .privacyMode
         }
 
         setupBindings()
@@ -109,6 +112,12 @@ class VoiceAssistantViewModel: ObservableObject {
         audioManager.$wakeWordEnabled
             .sink { [weak self] enabled in
                 self?.wakeWordEnabled = enabled
+            }
+            .store(in: &cancellables)
+
+        audioManager.$vadEnabled
+            .sink { [weak self] enabled in
+                self?.vadEnabled = enabled
             }
             .store(in: &cancellables)
 
@@ -163,7 +172,9 @@ class VoiceAssistantViewModel: ObservableObject {
 
         speechRecognitionManager.$currentTranscript
             .sink { [weak self] transcript in
-                self?.transcript = transcript
+                guard let self = self else { return }
+                print("🔄 Transcript binding update: '\(transcript)'")
+                self.transcript = transcript
             }
             .store(in: &cancellables)
 
@@ -183,10 +194,13 @@ class VoiceAssistantViewModel: ObservableObject {
                 self.transcript = transcript
 
                 if isFinal {
-                    print("📝 Final transcript: \(transcript)")
+                    print("📝 Final transcript (callback): \(transcript)")
 
-                    // Add to messages
-                    self.addUserMessage(transcript)
+                    // Add to messages only if not already added
+                    if !self.currentTranscriptAdded {
+                        self.addUserMessage(transcript)
+                        self.currentTranscriptAdded = true
+                    }
 
                     // Send to backend based on mode
                     if self.recognitionMode != .professionalMode {
@@ -273,6 +287,16 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     func startListening() {
+        print("🎙️ Starting listening session")
+        print("   Current transcript before clear: '\(transcript)'")
+        print("   Current flag state: \(currentTranscriptAdded)")
+
+        // Clear previous transcript to start fresh
+        transcript = ""
+        currentTranscriptAdded = false // Reset flag for new recording
+
+        print("   Transcript cleared, flag reset")
+
         switch recognitionMode {
         case .privacyMode, .standardMode:
             // Use native speech recognition
@@ -281,6 +305,7 @@ class VoiceAssistantViewModel: ObservableObject {
                 try speechRecognitionManager.startRecognition()
                 // Just update UI state without starting audio manager
                 audioManager.isRecording = true
+                print("✅ Speech recognition started successfully")
             } catch {
                 print("❌ Failed to start speech recognition: \(error)")
                 recognitionError = error.localizedDescription
@@ -294,12 +319,29 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     func stopListening() {
+        print("🛑 Stopping listening session")
+        print("   Current transcript: '\(transcript)'")
+        print("   Flag state: \(currentTranscriptAdded)")
+
         switch recognitionMode {
         case .privacyMode, .standardMode:
             // Stop native speech recognition
             speechRecognitionManager.stopRecognition()
             // Just update UI state
             audioManager.isRecording = false
+
+            // Add message if we have a transcript and it hasn't been added yet
+            // This handles the case where user manually stops before system marks as final
+            if !transcript.isEmpty && !currentTranscriptAdded {
+                print("📝 Adding transcript on manual stop: \(transcript)")
+                addUserMessage(transcript)
+                currentTranscriptAdded = true
+                print("   Message added, messages count: \(messages.count)")
+            } else if currentTranscriptAdded {
+                print("ℹ️ Transcript already added via callback")
+            } else if transcript.isEmpty {
+                print("⚠️ No transcript to add (empty)")
+            }
 
         case .professionalMode:
             // Stop WebRTC streaming
