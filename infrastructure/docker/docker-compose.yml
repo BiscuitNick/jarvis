@@ -80,7 +80,19 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT secret required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-30d}
+      # Orchestration configuration
       ASR_GATEWAY_URL: http://asr-gateway:3001
+      LLM_ROUTER_URL: http://llm-router:3003
+      RAG_SERVICE_URL: http://rag-service:3002
+      TTS_SERVICE_URL: http://tts-service:3004
+      MAX_LATENCY_MS: ${MAX_LATENCY_MS:-10000}
+      # Latency thresholds
+      FIRST_TOKEN_LATENCY_MS: ${FIRST_TOKEN_LATENCY_MS:-500}
+      END_TO_END_LATENCY_MS: ${END_TO_END_LATENCY_MS:-2000}
+      # Interruption handling
+      VAD_THRESHOLD: ${VAD_THRESHOLD:-0.7}
+      VAD_DURATION_MS: ${VAD_DURATION_MS:-150}
+      INTERRUPTION_COOLDOWN_MS: ${INTERRUPTION_COOLDOWN_MS:-1000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Database connection pooling
       PGPOOL_MAX_INGRESS: ${PGPOOL_MAX_INGRESS:-5}
