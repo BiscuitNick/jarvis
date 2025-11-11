@@ -8,6 +8,35 @@
 import Foundation
 import Combine
 
+// MARK: - Recognition Mode
+
+enum RecognitionMode: String, CaseIterable, Identifiable {
+    case privacyMode = "Privacy Mode"
+    case standardMode = "Standard Mode"
+    case professionalMode = "Professional Mode"
+
+    var id: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .privacyMode:
+            return "On-device recognition. Audio never leaves your device. Works offline. Limited to 1-minute sessions."
+        case .standardMode:
+            return "Apple cloud recognition. Better accuracy, unlimited duration. Requires internet."
+        case .professionalMode:
+            return "WebRTC streaming with 3rd party STT. Best accuracy for professional use."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .privacyMode: return "lock.shield.fill"
+        case .standardMode: return "icloud.fill"
+        case .professionalMode: return "waveform.circle.fill"
+        }
+    }
+}
+
 @MainActor
 class VoiceAssistantViewModel: ObservableObject {
     @Published var transcript = ""
@@ -26,10 +55,21 @@ class VoiceAssistantViewModel: ObservableObject {
     @Published var currentSessionId: String?
     @Published var sessionStatus: String = "inactive"
 
+    // Speech Recognition
+    @Published var recognitionMode: RecognitionMode {
+        didSet {
+            UserDefaults.standard.set(recognitionMode.rawValue, forKey: "recognitionMode")
+            updateRecognitionMode()
+        }
+    }
+    @Published var isRecognizing = false
+    @Published var recognitionError: String?
+
     let audioManager: AudioManager
     let webRTCClient: WebRTCClient
     let grpcClient: GRPCClient
     let authService: AuthenticationService
+    let speechRecognitionManager: SpeechRecognitionManager
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -37,14 +77,26 @@ class VoiceAssistantViewModel: ObservableObject {
         audioManager: AudioManager,
         webRTCClient: WebRTCClient,
         grpcClient: GRPCClient,
-        authService: AuthenticationService
+        authService: AuthenticationService,
+        speechRecognitionManager: SpeechRecognitionManager = SpeechRecognitionManager()
     ) {
         self.audioManager = audioManager
         self.webRTCClient = webRTCClient
         self.grpcClient = grpcClient
         self.authService = authService
+        self.speechRecognitionManager = speechRecognitionManager
+
+        // Load saved recognition mode from UserDefaults
+        if let savedMode = UserDefaults.standard.string(forKey: "recognitionMode"),
+           let mode = RecognitionMode(rawValue: savedMode) {
+            self.recognitionMode = mode
+        } else {
+            // Default to standard mode for best balance
+            self.recognitionMode = .standardMode
+        }
 
         setupBindings()
+        setupSpeechRecognition()
     }
 
     private func setupBindings() {
@@ -101,6 +153,74 @@ class VoiceAssistantViewModel: ObservableObject {
                 self?.currentSessionId = sessionId
             }
             .store(in: &cancellables)
+
+        // Speech recognition bindings
+        speechRecognitionManager.$isRecognizing
+            .sink { [weak self] recognizing in
+                self?.isRecognizing = recognizing
+            }
+            .store(in: &cancellables)
+
+        speechRecognitionManager.$currentTranscript
+            .sink { [weak self] transcript in
+                self?.transcript = transcript
+            }
+            .store(in: &cancellables)
+
+        speechRecognitionManager.$recognitionError
+            .sink { [weak self] error in
+                self?.recognitionError = error
+            }
+            .store(in: &cancellables)
+    }
+
+    private func setupSpeechRecognition() {
+        // Set up callback for transcripts
+        speechRecognitionManager.onTranscript = { [weak self] transcript, isFinal in
+            Task { @MainActor in
+                guard let self = self else { return }
+
+                self.transcript = transcript
+
+                if isFinal {
+                    print("📝 Final transcript: \(transcript)")
+
+                    // Add to messages
+                    self.addUserMessage(transcript)
+
+                    // Send to backend based on mode
+                    if self.recognitionMode != .professionalMode {
+                        // For native speech modes, send text via gRPC
+                        await self.sendTranscriptToBackend(transcript)
+                    }
+                }
+            }
+        }
+
+        // Apply initial recognition mode
+        updateRecognitionMode()
+    }
+
+    private func updateRecognitionMode() {
+        switch recognitionMode {
+        case .privacyMode:
+            speechRecognitionManager.setRecognitionMode(onDevice: true)
+            print("🔒 Recognition mode: Privacy (on-device)")
+
+        case .standardMode:
+            speechRecognitionManager.setRecognitionMode(onDevice: false)
+            print("☁️ Recognition mode: Standard (Apple cloud)")
+
+        case .professionalMode:
+            print("💼 Recognition mode: Professional (WebRTC)")
+        }
+    }
+
+    private func sendTranscriptToBackend(_ transcript: String) async {
+        // TODO: Implement gRPC message sending
+        print("📤 Sending transcript to backend: \(transcript)")
+        // This will be implemented when gRPC streaming is ready
+        // try? await grpcClient.sendUserMessage(transcript)
     }
 
     func startWakeWordDetection() async {
@@ -153,11 +273,45 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     func startListening() {
-        audioManager.startRecording()
+        switch recognitionMode {
+        case .privacyMode, .standardMode:
+            // Use native speech recognition
+            do {
+                try speechRecognitionManager.startRecognition()
+                audioManager.startRecording() // For UI feedback
+            } catch {
+                print("❌ Failed to start speech recognition: \(error)")
+                recognitionError = error.localizedDescription
+            }
+
+        case .professionalMode:
+            // Use traditional WebRTC approach
+            audioManager.startRecording()
+            startAudioStreaming()
+        }
     }
 
     func stopListening() {
-        audioManager.stopRecording()
+        switch recognitionMode {
+        case .privacyMode, .standardMode:
+            // Stop native speech recognition
+            speechRecognitionManager.stopRecognition()
+            audioManager.stopRecording()
+
+        case .professionalMode:
+            // Stop WebRTC streaming
+            audioManager.stopRecording()
+            stopAudioStreaming()
+        }
+    }
+
+    // Request permissions for speech recognition
+    func requestSpeechPermissions() async -> Bool {
+        let authorized = await speechRecognitionManager.requestAuthorization()
+        if !authorized {
+            recognitionError = "Speech recognition permission denied"
+        }
+        return authorized
     }
 
     func authenticate() async throws {
