@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel: VoiceAssistantViewModel
+    @State private var showSettings = false
 
     init() {
         let audioManager = AudioManager()
@@ -25,169 +26,261 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Jarvis")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+        NavigationView {
+            ZStack {
+                // Background gradient
+                LinearGradient(
+                    colors: [Color.black, Color.black.opacity(0.95)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
-            // Status Indicators
-            VStack(spacing: 8) {
-                HStack(spacing: 20) {
-                    // Wake Word Status
-                    HStack {
-                        Circle()
-                            .fill(viewModel.wakeWordEnabled ? Color.green : Color.gray)
-                            .frame(width: 12, height: 12)
-                        Text(viewModel.wakeWordEnabled ? "Wake word" : "Wake off")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                VStack(spacing: 0) {
+                    // Status Bar
+                    StatusBar(
+                        wakeWordEnabled: viewModel.wakeWordEnabled,
+                        voiceActivityDetected: viewModel.voiceActivityDetected,
+                        webRTCConnected: viewModel.webRTCConnected,
+                        grpcConnected: viewModel.grpcConnected,
+                        vadLatency: viewModel.vadLatency,
+                        bytesSent: viewModel.bytesSent
+                    )
+                    .padding(.horizontal)
+                    .padding(.top, 8)
 
-                    // VAD Status
-                    HStack {
-                        Circle()
-                            .fill(viewModel.voiceActivityDetected ? Color.red : Color.gray)
-                            .frame(width: 12, height: 12)
-                        Text(viewModel.voiceActivityDetected ? "Voice" : "Silent")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    // Waveform Visualization
+                    WaveformView(
+                        amplitudes: viewModel.audioAmplitudes,
+                        isActive: viewModel.audioStreamActive || viewModel.isListening
+                    )
+                    .frame(height: 80)
+                    .padding(.horizontal)
+                    .padding(.vertical, 12)
 
-                    // WebRTC Status
-                    HStack {
-                        Circle()
-                            .fill(viewModel.webRTCConnected ? Color.blue : Color.gray)
-                            .frame(width: 12, height: 12)
-                        Text(viewModel.webRTCConnected ? "WebRTC" : "Offline")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
+                    // Transcript Area
+                    TranscriptView(
+                        messages: viewModel.messages,
+                        isStreaming: viewModel.isStreaming
+                    )
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(16)
+                    .padding(.horizontal)
+                    .padding(.bottom, 12)
 
-                // Data sent indicator
-                if viewModel.bytesSent > 0 {
-                    Text(String(format: "Sent: %.1f KB", Double(viewModel.bytesSent) / 1024.0))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
+                    Spacer()
 
-            // VAD Latency Display
-            if viewModel.vadLatency > 0 {
-                Text(String(format: "VAD Latency: %.1fms", viewModel.vadLatency))
-                    .font(.caption2)
-                    .foregroundColor(viewModel.vadLatency < 150 ? .green : .orange)
-            }
+                    // Microphone Button
+                    LabeledMicrophoneButton(
+                        isListening: viewModel.isListening,
+                        isActive: viewModel.wakeWordEnabled || viewModel.audioStreamActive,
+                        action: {
+                            if viewModel.isListening {
+                                viewModel.stopListening()
+                                viewModel.addUserMessage(viewModel.transcript)
 
-            // Transcript Display
-            ScrollView {
-                Text(viewModel.transcript.isEmpty ? "Say 'Jarvis' to activate..." : viewModel.transcript)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 300)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(10)
-
-            VStack(spacing: 10) {
-                // Wake Word Toggle
-                Toggle("Enable Wake Word Detection", isOn: Binding(
-                    get: { viewModel.wakeWordEnabled },
-                    set: { enabled in
-                        if enabled {
-                            Task {
-                                await viewModel.startWakeWordDetection()
+                                // Simulate assistant response for testing
+                                Task {
+                                    viewModel.startStreaming()
+                                    try? await Task.sleep(for: .seconds(1))
+                                    viewModel.addAssistantMessage(
+                                        "I'm processing your request. This is a test response.",
+                                        sources: [
+                                            Citation(
+                                                title: "Example Source",
+                                                url: "https://example.com",
+                                                snippet: "This is a sample citation"
+                                            )
+                                        ]
+                                    )
+                                }
+                            } else {
+                                viewModel.startListening()
                             }
-                        } else {
-                            viewModel.stopWakeWordDetection()
                         }
-                    }
-                ))
-
-                // VAD Toggle
-                Button(action: {
-                    if viewModel.voiceActivityDetected {
-                        viewModel.stopVAD()
-                    } else {
-                        viewModel.startVAD()
-                    }
-                }) {
-                    HStack {
-                        Text("Test Voice Activity Detection")
-                        Image(systemName: viewModel.voiceActivityDetected ? "waveform" : "waveform.slash")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(8)
+                    )
+                    .padding(.bottom, 32)
                 }
-
-                // WebRTC Connection Toggle
-                Button(action: {
-                    if viewModel.webRTCConnected {
-                        viewModel.disconnectWebRTC()
-                    } else {
-                        Task {
-                            await viewModel.connectWebRTC()
-                        }
-                    }
-                }) {
-                    HStack {
-                        Text(viewModel.webRTCConnected ? "Disconnect WebRTC" : "Connect WebRTC")
-                        Image(systemName: viewModel.webRTCConnected ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(viewModel.webRTCConnected ? Color.green.opacity(0.1) : Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-                }
-
-                // Audio Streaming Toggle
-                if viewModel.webRTCConnected {
-                    Button(action: {
-                        if viewModel.audioStreamActive {
-                            viewModel.stopAudioStreaming()
-                        } else {
-                            viewModel.startAudioStreaming()
-                        }
-                    }) {
-                        HStack {
-                            Text(viewModel.audioStreamActive ? "Stop Streaming" : "Start Streaming")
-                            Image(systemName: viewModel.audioStreamActive ? "speaker.wave.3" : "speaker.slash")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(viewModel.audioStreamActive ? Color.red.opacity(0.1) : Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+            }
+            .navigationTitle("Jarvis")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showSettings.toggle() }) {
+                        Image(systemName: "gearshape")
+                            .foregroundColor(.white)
                     }
                 }
             }
-            .padding(.horizontal)
-
-            // Microphone Button
-            Button(action: {
-                if viewModel.isListening {
-                    viewModel.stopListening()
-                } else {
-                    viewModel.startListening()
-                }
-            }) {
-                Image(systemName: viewModel.isListening ? "mic.fill" : "mic")
-                    .font(.system(size: 60))
-                    .foregroundColor(viewModel.isListening ? .red : .blue)
+            .sheet(isPresented: $showSettings) {
+                SettingsView(viewModel: viewModel)
             }
-            .padding()
-
-            Text(viewModel.isListening ? "Listening..." : "Tap to speak")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            .task {
+                do {
+                    try await viewModel.authenticate()
+                    viewModel.addSystemMessage("System initialized. Ready to use.")
+                } catch {
+                    print("Authentication failed: \(error)")
+                    viewModel.addSystemMessage("Authentication failed: \(error.localizedDescription)")
+                }
+            }
         }
-        .padding()
-        .task {
-            do {
-                try await viewModel.authenticate()
-            } catch {
-                print("Authentication failed: \(error)")
+        .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - Settings View
+
+struct SettingsView: View {
+    @ObservedObject var viewModel: VoiceAssistantViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Audio") {
+                    Toggle("Wake Word Detection", isOn: Binding(
+                        get: { viewModel.wakeWordEnabled },
+                        set: { enabled in
+                            if enabled {
+                                Task {
+                                    await viewModel.startWakeWordDetection()
+                                }
+                            } else {
+                                viewModel.stopWakeWordDetection()
+                            }
+                        }
+                    ))
+
+                    Button("Test Voice Activity Detection") {
+                        if viewModel.voiceActivityDetected {
+                            viewModel.stopVAD()
+                        } else {
+                            viewModel.startVAD()
+                        }
+                    }
+                }
+
+                Section("Connection") {
+                    HStack {
+                        Text("WebRTC")
+                        Spacer()
+                        Circle()
+                            .fill(viewModel.webRTCConnected ? Color.green : Color.gray)
+                            .frame(width: 12, height: 12)
+                    }
+
+                    Button(viewModel.webRTCConnected ? "Disconnect" : "Connect") {
+                        if viewModel.webRTCConnected {
+                            viewModel.disconnectWebRTC()
+                        } else {
+                            Task {
+                                await viewModel.connectWebRTC()
+                            }
+                        }
+                    }
+
+                    if viewModel.webRTCConnected {
+                        Button(viewModel.audioStreamActive ? "Stop Streaming" : "Start Streaming") {
+                            if viewModel.audioStreamActive {
+                                viewModel.stopAudioStreaming()
+                            } else {
+                                viewModel.startAudioStreaming()
+                            }
+                        }
+                    }
+                }
+
+                Section("Session") {
+                    if let sessionId = viewModel.currentSessionId {
+                        HStack {
+                            Text("Session ID")
+                            Spacer()
+                            Text(sessionId.prefix(8) + "...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Text("Status: \(viewModel.sessionStatus)")
+                    } else {
+                        Text("No active session")
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Section("Security") {
+                    if let biometricType = viewModel.authService.getBiometricTypeString() {
+                        Toggle(biometricType, isOn: Binding(
+                            get: { viewModel.authService.biometricAuthEnabled },
+                            set: { enabled in
+                                if enabled {
+                                    viewModel.authService.enableBiometricAuth()
+                                } else {
+                                    viewModel.authService.disableBiometricAuth()
+                                }
+                            }
+                        ))
+
+                        if viewModel.authService.biometricAuthEnabled {
+                            Button("Test Biometric Auth") {
+                                Task {
+                                    do {
+                                        let success = try await viewModel.authService.authenticateWithBiometrics()
+                                        print(success ? "✅ Auth success" : "❌ Auth failed")
+                                    } catch {
+                                        print("❌ Auth error: \(error)")
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Text("Biometric authentication not available")
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Text("Device ID")
+                        Spacer()
+                        if let deviceId = viewModel.authService.deviceId {
+                            Text(deviceId.prefix(8) + "...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Not registered")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Button("Refresh Token") {
+                        Task {
+                            do {
+                                let _ = try await viewModel.authService.refreshDeviceToken()
+                            } catch {
+                                print("❌ Token refresh failed: \(error)")
+                            }
+                        }
+                    }
+                }
+
+                Section("Actions") {
+                    Button("Clear Transcript", role: .destructive) {
+                        viewModel.clearTranscript()
+                    }
+
+                    Button("Test Audio Visualization") {
+                        viewModel.simulateAudioAmplitudes()
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
             }
         }
     }

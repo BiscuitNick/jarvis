@@ -7,23 +7,223 @@
 
 import Foundation
 import Security
+import LocalAuthentication
 import Combine
 
 @MainActor
 class AuthenticationService: ObservableObject {
     @Published var isAuthenticated = false
+    @Published var biometricAuthEnabled = false
+    @Published var deviceId: String?
 
     private let keychainService = "com.jarvis.devicetoken"
+    private let context = LAContext()
 
     func getDeviceToken() -> String? {
-        // TODO: Retrieve from Keychain
         return retrieveFromKeychain(key: "deviceToken")
     }
 
     func saveDeviceToken(_ token: String) throws {
-        // TODO: Save to Keychain
         try saveToKeychain(key: "deviceToken", value: token)
         isAuthenticated = true
+    }
+
+    func getUserId() -> String? {
+        return retrieveFromKeychain(key: "userId")
+    }
+
+    func saveUserId(_ userId: String) throws {
+        try saveToKeychain(key: "userId", value: userId)
+    }
+
+    func deleteDeviceToken() throws {
+        try deleteFromKeychain(key: "deviceToken")
+        isAuthenticated = false
+    }
+
+    func deleteUserId() throws {
+        try deleteFromKeychain(key: "userId")
+    }
+
+    // MARK: - Device Registration
+
+    /// Generate or retrieve a unique device identifier
+    func getOrCreateDeviceId() -> String {
+        if let existingId = retrieveFromKeychain(key: "deviceId") {
+            deviceId = existingId
+            return existingId
+        }
+
+        // Generate new device ID using UIDevice identifierForVendor
+        let newDeviceId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        try? saveToKeychain(key: "deviceId", value: newDeviceId)
+        deviceId = newDeviceId
+        return newDeviceId
+    }
+
+    /// Register the device with the backend
+    func registerDevice() async throws -> (deviceToken: String, userId: String) {
+        let deviceId = getOrCreateDeviceId()
+
+        // Generate a new device token
+        let deviceToken = UUID().uuidString
+
+        // Generate or retrieve user ID
+        let userId: String
+        if let existingUserId = getUserId() {
+            userId = existingUserId
+        } else {
+            userId = UUID().uuidString
+            try saveUserId(userId)
+        }
+
+        // Save the device token
+        try saveDeviceToken(deviceToken)
+
+        // TODO: Call backend API to register device
+        // let registrationResponse = try await backendAPI.registerDevice(deviceId: deviceId, userId: userId)
+
+        isAuthenticated = true
+        print("✅ Device registered: \(deviceId)")
+        print("📱 User ID: \(userId)")
+
+        return (deviceToken, userId)
+    }
+
+    /// Deregister the device and revoke tokens
+    func deregisterDevice() async throws {
+        guard let deviceId = deviceId else {
+            throw KeychainError.deviceNotRegistered
+        }
+
+        // TODO: Call backend API to deregister device
+        // try await backendAPI.deregisterDevice(deviceId: deviceId)
+
+        // Clear all stored credentials
+        try? deleteDeviceToken()
+        try? deleteUserId()
+        try? deleteFromKeychain(key: "deviceId")
+
+        isAuthenticated = false
+        self.deviceId = nil
+
+        print("🔓 Device deregistered: \(deviceId)")
+    }
+
+    // MARK: - Biometric Authentication
+
+    /// Check if biometric authentication is available
+    func checkBiometricAvailability() -> (available: Bool, type: LABiometryType) {
+        var error: NSError?
+        let canEvaluate = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+
+        if let error = error {
+            print("⚠️ Biometric check error: \(error.localizedDescription)")
+        }
+
+        return (canEvaluate, context.biometryType)
+    }
+
+    /// Enable biometric authentication
+    func enableBiometricAuth() {
+        let (available, type) = checkBiometricAvailability()
+        guard available else {
+            print("⚠️ Biometric authentication not available")
+            return
+        }
+
+        biometricAuthEnabled = true
+        print("✅ Biometric authentication enabled: \(type)")
+    }
+
+    /// Disable biometric authentication
+    func disableBiometricAuth() {
+        biometricAuthEnabled = false
+        print("🔓 Biometric authentication disabled")
+    }
+
+    /// Authenticate using biometrics
+    func authenticateWithBiometrics() async throws -> Bool {
+        guard biometricAuthEnabled else {
+            throw KeychainError.biometricNotEnabled
+        }
+
+        let (available, type) = checkBiometricAvailability()
+        guard available else {
+            throw KeychainError.biometricNotAvailable
+        }
+
+        let reason = getBiometricPromptMessage(for: type)
+
+        do {
+            let success = try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
+
+            if success {
+                print("✅ Biometric authentication successful")
+                isAuthenticated = true
+            }
+
+            return success
+        } catch let error as LAError {
+            print("❌ Biometric authentication failed: \(error.localizedDescription)")
+            throw KeychainError.biometricAuthFailed(error.localizedDescription)
+        }
+    }
+
+    private func getBiometricPromptMessage(for type: LABiometryType) -> String {
+        switch type {
+        case .faceID:
+            return "Authenticate with Face ID to access Jarvis"
+        case .touchID:
+            return "Authenticate with Touch ID to access Jarvis"
+        case .opticID:
+            return "Authenticate with Optic ID to access Jarvis"
+        default:
+            return "Authenticate to access Jarvis"
+        }
+    }
+
+    /// Get biometric type as a user-friendly string
+    func getBiometricTypeString() -> String? {
+        let (available, type) = checkBiometricAvailability()
+        guard available else { return nil }
+
+        switch type {
+        case .faceID:
+            return "Face ID"
+        case .touchID:
+            return "Touch ID"
+        case .opticID:
+            return "Optic ID"
+        default:
+            return nil
+        }
+    }
+
+    // MARK: - Token Refresh
+
+    /// Refresh the device token
+    func refreshDeviceToken() async throws -> String {
+        guard let existingToken = getDeviceToken() else {
+            throw KeychainError.tokenNotFound
+        }
+
+        // TODO: Call backend API to refresh token
+        // let newToken = try await backendAPI.refreshToken(oldToken: existingToken)
+
+        // For now, generate a new token
+        let newToken = UUID().uuidString
+        try saveDeviceToken(newToken)
+
+        print("🔄 Device token refreshed")
+        return newToken
+    }
+
+    /// Check if token needs refresh (based on expiry)
+    func shouldRefreshToken() -> Bool {
+        // TODO: Implement token expiry checking
+        // Check token expiration date stored in Keychain or from backend
+        return false
     }
 
     private func saveToKeychain(key: String, value: String) throws {
@@ -62,7 +262,45 @@ class AuthenticationService: ObservableObject {
         return value
     }
 
-    enum KeychainError: Error {
+    private func deleteFromKeychain(key: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: key
+        ]
+
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.deleteFailed
+        }
+    }
+
+    enum KeychainError: Error, LocalizedError {
         case saveFailed
+        case deleteFailed
+        case deviceNotRegistered
+        case biometricNotAvailable
+        case biometricNotEnabled
+        case biometricAuthFailed(String)
+        case tokenNotFound
+
+        var errorDescription: String? {
+            switch self {
+            case .saveFailed:
+                return "Failed to save to Keychain"
+            case .deleteFailed:
+                return "Failed to delete from Keychain"
+            case .deviceNotRegistered:
+                return "Device is not registered"
+            case .biometricNotAvailable:
+                return "Biometric authentication is not available on this device"
+            case .biometricNotEnabled:
+                return "Biometric authentication is not enabled"
+            case .biometricAuthFailed(let reason):
+                return "Biometric authentication failed: \(reason)"
+            case .tokenNotFound:
+                return "Device token not found"
+            }
+        }
     }
 }

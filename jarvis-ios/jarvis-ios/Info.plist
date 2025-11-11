@@ -14,5 +14,7 @@
 	<string>Jarvis uses speech recognition to understand your voice commands and wake word detection.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Jarvis needs network access to communicate with the voice assistant backend.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Jarvis uses Face ID to securely authenticate your device and protect your conversations.</string>
 </dict>
 </plist>
