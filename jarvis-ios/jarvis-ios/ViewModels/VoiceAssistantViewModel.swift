@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import AVFoundation
 
 // MARK: - Recognition Mode
 
@@ -231,10 +232,84 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     private func sendTranscriptToBackend(_ transcript: String) async {
-        // TODO: Implement gRPC message sending
         print("📤 Sending transcript to backend: \(transcript)")
-        // This will be implemented when gRPC streaming is ready
-        // try? await grpcClient.sendUserMessage(transcript)
+
+        do {
+            // Get access token
+            guard let accessToken = authService.getAccessToken() else {
+                print("❌ No access token available")
+                await addMessage("Error: Not authenticated", isUser: false)
+                return
+            }
+
+            // Call chat API
+            let baseURL = "https://terese-gableended-underfoot.ngrok-free.dev"
+            guard let url = URL(string: "\(baseURL)/api/chat/message") else {
+                print("❌ Invalid URL")
+                return
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            let body: [String: Any] = [
+                "message": transcript,
+                "intent": "conversational"
+            ]
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+            print("🌐 Calling chat API...")
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid response")
+                return
+            }
+
+            print("📡 Response status: \(httpResponse.statusCode)")
+
+            guard httpResponse.statusCode == 200 else {
+                if let errorText = String(data: data, encoding: .utf8) {
+                    print("❌ API error: \(errorText)")
+                }
+                await addMessage("Error: Failed to get response", isUser: false)
+                return
+            }
+
+            // Parse response
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let content = json?["content"] as? String else {
+                print("❌ No content in response")
+                return
+            }
+
+            print("✅ Got response: \(content)")
+
+            // Add to messages
+            await addMessage(content, isUser: false)
+
+            // Speak the response using iOS native TTS
+            speakText(content)
+
+        } catch {
+            print("❌ Error sending transcript: \(error)")
+            await addMessage("Error: \(error.localizedDescription)", isUser: false)
+        }
+    }
+
+    private func speakText(_ text: String) {
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.5
+        utterance.pitchMultiplier = 1.0
+        utterance.volume = 1.0
+
+        let synthesizer = AVSpeechSynthesizer()
+        synthesizer.speak(utterance)
+
+        print("🔊 Speaking response")
     }
 
     func startWakeWordDetection() async {

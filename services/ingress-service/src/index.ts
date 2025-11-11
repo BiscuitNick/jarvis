@@ -6,7 +6,7 @@ import { httpLogger, logger } from './utils/logger';
 import { register as metricsRegister, httpRequestDuration } from './utils/metrics';
 import MediaServer from './webrtc/MediaServer';
 import { createGrpcServer } from './grpc/sessionService';
-import { rateLimit } from './auth/middleware';
+import { rateLimit, requireAuth } from './auth/middleware';
 
 // Import orchestration components
 import { PipelineOrchestrator } from './orchestration/PipelineOrchestrator';
@@ -19,6 +19,7 @@ import authRoutes from './routes/auth';
 import sessionRoutes from './routes/session';
 import webrtcRoutes from './routes/webrtc';
 import orchestrationRoutes, { initializeOrchestration } from './routes/orchestration';
+import chatRoutes from './routes/chat';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -109,6 +110,7 @@ app.use('/api/auth', rateLimit(100, 60000), authRoutes);
 app.use('/api/session', rateLimit(200, 60000), sessionRoutes);
 app.use('/api/webrtc', rateLimit(500, 60000), webrtcRoutes);
 app.use('/api/orchestration', rateLimit(500, 60000), orchestrationRoutes);
+app.use('/api/chat', requireAuth, rateLimit(100, 60000), chatRoutes);
 
 let server: HTTPServer;
 let wss: WebSocketServer;

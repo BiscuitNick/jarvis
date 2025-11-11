@@ -37,6 +37,24 @@ class AuthenticationService: ObservableObject {
         try saveToKeychain(key: "userId", value: userId)
     }
 
+    // MARK: - Access Token Management
+
+    func getAccessToken() -> String? {
+        return retrieveFromKeychain(key: "accessToken")
+    }
+
+    func saveAccessToken(_ token: String) throws {
+        try saveToKeychain(key: "accessToken", value: token)
+    }
+
+    func getRefreshToken() -> String? {
+        return retrieveFromKeychain(key: "refreshToken")
+    }
+
+    func saveRefreshToken(_ token: String) throws {
+        try saveToKeychain(key: "refreshToken", value: token)
+    }
+
     func deleteDeviceToken() throws {
         try deleteFromKeychain(key: "deviceToken")
         isAuthenticated = false
@@ -44,6 +62,14 @@ class AuthenticationService: ObservableObject {
 
     func deleteUserId() throws {
         try deleteFromKeychain(key: "userId")
+    }
+
+    func deleteAccessToken() throws {
+        try deleteFromKeychain(key: "accessToken")
+    }
+
+    func deleteRefreshToken() throws {
+        try deleteFromKeychain(key: "refreshToken")
     }
 
     // MARK: - Device Registration
@@ -66,29 +92,55 @@ class AuthenticationService: ObservableObject {
     func registerDevice() async throws -> (deviceToken: String, userId: String) {
         let deviceId = getOrCreateDeviceId()
 
-        // Generate a new device token
-        let deviceToken = UUID().uuidString
-
-        // Generate or retrieve user ID
-        let userId: String
-        if let existingUserId = getUserId() {
-            userId = existingUserId
-        } else {
-            userId = UUID().uuidString
-            try saveUserId(userId)
+        // Check if we already have an access token
+        if let existingToken = getAccessToken(), let existingUserId = getUserId() {
+            print("✅ Already authenticated with existing token")
+            return (existingToken, existingUserId)
         }
 
-        // Save the device token
-        try saveDeviceToken(deviceToken)
+        // Call backend API to register device
+        let baseURL = "https://terese-gableended-underfoot.ngrok-free.dev"
+        guard let url = URL(string: "\(baseURL)/api/auth/register") else {
+            throw KeychainError.invalidURL
+        }
 
-        // TODO: Call backend API to register device
-        // let registrationResponse = try await backendAPI.registerDevice(deviceId: deviceId, userId: userId)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = ["deviceIdentifier": deviceId]
+        request.httpBody = try JSONEncoder().encode(body)
+
+        print("🔐 Registering device with backend...")
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 201 else {
+            throw KeychainError.registrationFailed
+        }
+
+        // Parse response
+        let authResponse = try JSONDecoder().decode(AuthResponse.self, from: data)
+
+        // ✅ Save accessToken (NOT refreshToken) for API calls
+        try saveAccessToken(authResponse.accessToken)
+        try saveRefreshToken(authResponse.refreshToken)
+        try saveUserId(authResponse.userId)
+        try saveDeviceToken(authResponse.deviceToken)
 
         isAuthenticated = true
         print("✅ Device registered: \(deviceId)")
-        print("📱 User ID: \(userId)")
+        print("📱 User ID: \(authResponse.userId)")
+        print("🔑 Access token stored")
 
-        return (deviceToken, userId)
+        return (authResponse.accessToken, authResponse.userId)
+    }
+
+    struct AuthResponse: Codable {
+        let userId: String
+        let deviceToken: String
+        let accessToken: String
+        let refreshToken: String
+        let expiresIn: String
     }
 
     /// Deregister the device and revoke tokens
@@ -103,6 +155,8 @@ class AuthenticationService: ObservableObject {
         // Clear all stored credentials
         try? deleteDeviceToken()
         try? deleteUserId()
+        try? deleteAccessToken()
+        try? deleteRefreshToken()
         try? deleteFromKeychain(key: "deviceId")
 
         isAuthenticated = false
@@ -284,6 +338,8 @@ class AuthenticationService: ObservableObject {
         case biometricNotEnabled
         case biometricAuthFailed(String)
         case tokenNotFound
+        case invalidURL
+        case registrationFailed
 
         var errorDescription: String? {
             switch self {
@@ -301,6 +357,10 @@ class AuthenticationService: ObservableObject {
                 return "Biometric authentication failed: \(reason)"
             case .tokenNotFound:
                 return "Device token not found"
+            case .invalidURL:
+                return "Invalid backend URL"
+            case .registrationFailed:
+                return "Failed to register device with backend"
             }
         }
     }

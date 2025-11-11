@@ -304,6 +304,26 @@ services:
     networks:
       - jarvis-network
 
+  # ngrok tunnel for public HTTPS access
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: jarvis-ngrok
+    restart: unless-stopped
+    command:
+      - "http"
+      - "ingress:3000"
+      - "--log=stdout"
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    ports:
+      - "4040:4040"  # ngrok web interface
+    depends_on:
+      - ingress
+    networks:
+      - jarvis-network
+    profiles:
+      - ngrok  # Only start when explicitly requested
+
 volumes:
   postgres_data:
     driver: local
