@@ -154,7 +154,7 @@
         "dependencies": [
           2
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": [
           {
             "id": 1,
@@ -162,7 +162,7 @@
             "description": "Initialize and configure WebRTC media server infrastructure using mediasoup for Node.js or Pion for Go to handle real-time audio streaming capabilities",
             "dependencies": [],
             "details": "Install and configure mediasoup or Pion WebRTC library. Set up media server workers and routers. Configure audio codecs (Opus preferred). Implement peer connection management and SDP offer/answer handling. Set up ICE candidate gathering and STUN/TURN server integration for NAT traversal. Configure media server scaling and resource management.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for media server initialization and configuration. Integration tests with WebRTC test clients. Verify audio codec negotiation and peer connection establishment."
           },
           {
@@ -173,7 +173,7 @@
               1
             ],
             "details": "Implement WebRTC data channel setup for audio streaming. Create audio chunk buffering and processing pipeline. Handle audio format conversion and validation (16kHz, mono, 16-bit PCM). Implement audio frame synchronization and timestamp management. Add audio quality monitoring and packet loss detection. Create audio stream routing to ASR services.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test audio chunk reception with various client implementations. Validate audio format conversion accuracy. Test packet loss handling and audio quality metrics."
           },
           {
@@ -182,7 +182,7 @@
             "description": "Create the control plane API endpoints using gRPC and HTTP2 for session management operations including start, stop, status, and configuration",
             "dependencies": [],
             "details": "Define gRPC protobuf schemas for session control messages. Implement session start/stop/status endpoints. Create HTTP2 REST API for backward compatibility. Add request validation and error handling. Implement session configuration endpoints (audio settings, voice parameters). Add health check and metrics endpoints. Configure TLS termination and certificate management.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Unit tests for all API endpoints and message validation. Integration tests with gRPC and HTTP2 clients. Test TLS configuration and certificate handling."
           },
           {
@@ -194,7 +194,7 @@
               3
             ],
             "details": "Create session state machine with pending/active/completed/error states. Implement session persistence using Redis or in-memory store. Build routing logic to direct audio streams to appropriate ASR and TTS services. Add session timeout and cleanup mechanisms. Implement session recovery and failover handling. Create session metrics and monitoring dashboards.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test session state transitions and persistence. Validate routing logic with mock downstream services. Test session timeout and cleanup functionality. Load test with concurrent sessions."
           },
           {
@@ -203,7 +203,7 @@
             "description": "Create secure authentication mechanism using device tokens for client verification and authorization with session-based access control",
             "dependencies": [],
             "details": "Implement device token generation and validation system. Create JWT-based authentication with refresh tokens. Add token storage and revocation mechanisms. Implement rate limiting per device/token. Add authentication middleware for all endpoints. Create device registration and management APIs. Implement audit logging for authentication events.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test token generation, validation, and revocation flows. Validate rate limiting functionality. Test authentication middleware integration. Security testing for token handling."
           },
           {
@@ -212,7 +212,7 @@
             "description": "Implement comprehensive logging system with structured JSON format, request/response tracking, and integration with monitoring infrastructure",
             "dependencies": [],
             "details": "Configure structured logging with JSON format using libraries like Winston or logrus. Add request/response logging middleware with correlation IDs. Implement log levels and filtering. Add performance metrics logging (latency, throughput). Create log aggregation and forwarding to centralized systems. Implement error tracking and alerting. Add debugging and trace logging for troubleshooting.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Validate log format and structure. Test log correlation across service calls. Verify log aggregation and filtering. Test alerting mechanisms for critical errors."
           },
           {
@@ -223,8 +223,8 @@
               4,
               6
             ],
-            "details": "Configure Kubernetes HPA or AWS Auto Scaling for horizontal scaling. Set up load balancing with session affinity for WebRTC connections. Implement resource monitoring for CPU, memory, and network usage. Configure scaling triggers based on concurrent session count and resource utilization. Add graceful shutdown handling for scaling down. Implement health checks for auto-scaling decisions.\n<info added on 2025-11-10T22:39:42.125Z>\nDemo-scale on Lightsail with Docker Compose (single instance, manual scaling). Remove Kubernetes HPA and AWS Auto Scaling references.\n\nResource monitoring:\n- Add cadvisor to infrastructure/docker/docker-compose.yml to observe CPU/memory/network for all containers: image gcr.io/cadvisor/cadvisor:latest; ports \"9090:8080\"; volumes /:/rootfs:ro, /var/run:/var/run:ro, /sys:/sys:ro, /var/lib/docker/:/var/lib/docker:ro; networks jarvis-network. Access at http://<host>:9090 for manual scale decisions.\n- For a lightweight option, use docker stats and extend each service’s /healthz to include process.memoryUsage and process.uptime for quick checks (services/*/src/index.ts).\n\nGraceful shutdown (SIGTERM/SIGINT):\n- In each Node service entrypoint (e.g., services/ingress-service/src/index.ts, services/asr-gateway/src/index.ts, services/rag-service/src/index.ts, services/llm-router/src/index.ts, services/tts-service/src/index.ts), keep a server reference from app.listen and add handlers that: set a draining flag, have /healthz return 503 when draining, stop accepting new connections, server.close, then force-exit after a 10–30s timeout.\n- In infrastructure/docker/docker-compose.yml, set init: true and stop_grace_period: 20s (or 30s) on all app services to ensure graceful termination.\n\nHealth checks alignment:\n- All app services currently expose /healthz on PORT; update infrastructure/docker/docker-compose.yml to either remove the service-level healthcheck blocks (rely on Dockerfile HEALTHCHECK that uses Node to GET /healthz) or change tests to use Node (not wget) and point to /healthz.\n- Update infrastructure/nginx/conf.d/default.conf so the /health location proxies to http://ingress_backend/healthz (not /health).\n\nSession affinity and scaling guidance:\n- Keep a single ingress replica on the Lightsail instance; it binds 3478/udp and requires affinity for WebRTC. Do not scale the ingress service on a single host.\n- If needed, manually scale stateless services only (e.g., rag-service, tts-service, llm-router, asr-gateway) with docker compose -f infrastructure/docker/docker-compose.yml up -d --scale rag-service=2 tts-service=2 llm-router=2 asr-gateway=2 and monitor via cadvisor/docker stats.\n- For >10 users or multi-instance needs, add a Lightsail Load Balancer with sticky sessions and run one ingress per instance; keep sticky sessions enabled to preserve WebRTC session affinity.\n\nNotes:\n- Fix path mismatch in infrastructure/docker/docker-compose.yml for ingress build context to point at ../../services/ingress-service.\n- Ensure Nginx upstreams in infrastructure/nginx/nginx.conf continue to target service ports defined by PORT env vars (ingress:3000, asr-gateway:3001, etc.) after the healthcheck alignment.\n</info added on 2025-11-10T22:39:42.125Z>",
-            "status": "pending",
+            "details": "Configure Kubernetes HPA or AWS Auto Scaling for horizontal scaling. Set up load balancing with session affinity for WebRTC connections. Implement resource monitoring for CPU, memory, and network usage. Configure scaling triggers based on concurrent session count and resource utilization. Add graceful shutdown handling for scaling down. Implement health checks for auto-scaling decisions.\n<info added on 2025-11-10T22:39:42.125Z>\nDemo-scale on Lightsail with Docker Compose (single instance, manual scaling). Remove Kubernetes HPA and AWS Auto Scaling references.\n\nResource monitoring:\n- Add cadvisor to infrastructure/docker/docker-compose.yml to observe CPU/memory/network for all containers: image gcr.io/cadvisor/cadvisor:latest; ports \"9090:8080\"; volumes /:/rootfs:ro, /var/run:/var/run:ro, /sys:/sys:ro, /var/lib/docker/:/var/lib/docker:ro; networks jarvis-network. Access at http://<host>:9090 for manual scale decisions.\n- For a lightweight option, use docker stats and extend each service's /healthz to include process.memoryUsage and process.uptime for quick checks (services/*/src/index.ts).\n\nGraceful shutdown (SIGTERM/SIGINT):\n- In each Node service entrypoint (e.g., services/ingress-service/src/index.ts, services/asr-gateway/src/index.ts, services/rag-service/src/index.ts, services/llm-router/src/index.ts, services/tts-service/src/index.ts), keep a server reference from app.listen and add handlers that: set a draining flag, have /healthz return 503 when draining, stop accepting new connections, server.close, then force-exit after a 10–30s timeout.\n- In infrastructure/docker/docker-compose.yml, set init: true and stop_grace_period: 20s (or 30s) on all app services to ensure graceful termination.\n\nHealth checks alignment:\n- All app services currently expose /healthz on PORT; update infrastructure/docker/docker-compose.yml to either remove the service-level healthcheck blocks (rely on Dockerfile HEALTHCHECK that uses Node to GET /healthz) or change tests to use Node (not wget) and point to /healthz.\n- Update infrastructure/nginx/conf.d/default.conf so the /health location proxies to http://ingress_backend/healthz (not /health).\n\nSession affinity and scaling guidance:\n- Keep a single ingress replica on the Lightsail instance; it binds 3478/udp and requires affinity for WebRTC. Do not scale the ingress service on a single host.\n- If needed, manually scale stateless services only (e.g., rag-service, tts-service, llm-router, asr-gateway) with docker compose -f infrastructure/docker/docker-compose.yml up -d --scale rag-service=2 tts-service=2 llm-router=2 asr-gateway=2 and monitor via cadvisor/docker stats.\n- For >10 users or multi-instance needs, add a Lightsail Load Balancer with sticky sessions and run one ingress per instance; keep sticky sessions enabled to preserve WebRTC session affinity.\n\nNotes:\n- Fix path mismatch in infrastructure/docker/docker-compose.yml for ingress build context to point at ../../services/ingress-service.\n- Ensure Nginx upstreams in infrastructure/nginx/nginx.conf continue to target service ports defined by PORT env vars (ingress:3000, asr-gateway:3001, etc.) after the healthcheck alignment.\n</info added on 2025-11-10T22:39:42.125Z>",
+            "status": "done",
             "testStrategy": "Load test with simulated concurrent sessions to trigger auto-scaling. Test scaling up and down scenarios. Validate session affinity and load distribution. Monitor resource utilization during scaling events."
           }
         ]
