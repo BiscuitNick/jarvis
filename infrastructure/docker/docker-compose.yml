@@ -75,19 +75,30 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${INGRESS_PORT:-3000}
+      GRPC_PORT: ${INGRESS_GRPC_PORT:-50051}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-jarvis}
       JWT_SECRET: ${JWT_SECRET:?JWT secret required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-30d}
       ASR_GATEWAY_URL: http://asr-gateway:3001
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Database connection pooling
       PGPOOL_MAX_INGRESS: ${PGPOOL_MAX_INGRESS:-5}
       PG_CONN_TIMEOUT_MS: ${PG_CONN_TIMEOUT_MS:-2000}
       PG_IDLE_TIMEOUT_MS: ${PG_IDLE_TIMEOUT_MS:-10000}
       PG_CONNECT_RETRIES: ${PG_CONNECT_RETRIES:-3}
+      # WebRTC/Mediasoup configuration
+      RTC_MIN_PORT: ${RTC_MIN_PORT:-10000}
+      RTC_MAX_PORT: ${RTC_MAX_PORT:-10100}
+      MEDIASOUP_LISTEN_IP: ${MEDIASOUP_LISTEN_IP:-0.0.0.0}
+      MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-}
     ports:
-      - "3000:3000"
-      - "3478:3478/tcp"  # TURN/STUN TCP
-      - "3478:3478/udp"  # TURN/STUN UDP
+      - "3000:3000"           # HTTP API
+      - "50051:50051"         # gRPC
+      - "3478:3478/tcp"       # TURN/STUN TCP
+      - "3478:3478/udp"       # TURN/STUN UDP
+      - "10000-10100:10000-10100/udp"  # WebRTC media ports
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,7 +107,7 @@ services:
     networks:
       - jarvis-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/healthz"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/healthz', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s
       timeout: 10s
       retries: 3

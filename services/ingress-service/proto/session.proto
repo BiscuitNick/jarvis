@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package jarvis.ingress;
+
+service SessionControl {
+  // Start a new session
+  rpc StartSession (StartSessionRequest) returns (StartSessionResponse);
+
+  // Stop an active session
+  rpc StopSession (StopSessionRequest) returns (StopSessionResponse);
+
+  // Get session status
+  rpc GetSessionStatus (GetSessionStatusRequest) returns (GetSessionStatusResponse);
+
+  // Update session configuration
+  rpc UpdateSessionConfig (UpdateSessionConfigRequest) returns (UpdateSessionConfigResponse);
+
+  // List user sessions
+  rpc ListSessions (ListSessionsRequest) returns (ListSessionsResponse);
+}
+
+message StartSessionRequest {
+  string user_id = 1;
+  AudioConfig audio_config = 2;
+  VoiceConfig voice_config = 3;
+  map<string, string> metadata = 4;
+}
+
+message StartSessionResponse {
+  string session_id = 1;
+  string status = 2;
+  string webrtc_offer = 3;
+  string error_message = 4;
+}
+
+message StopSessionRequest {
+  string session_id = 1;
+}
+
+message StopSessionResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetSessionStatusRequest {
+  string session_id = 1;
+}
+
+message GetSessionStatusResponse {
+  string session_id = 1;
+  string status = 2;
+  int64 created_at = 3;
+  int64 updated_at = 4;
+  int64 expires_at = 5;
+}
+
+message UpdateSessionConfigRequest {
+  string session_id = 1;
+  AudioConfig audio_config = 2;
+  VoiceConfig voice_config = 3;
+}
+
+message UpdateSessionConfigResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListSessionsRequest {
+  string user_id = 1;
+}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message SessionInfo {
+  string session_id = 1;
+  string status = 2;
+  int64 created_at = 3;
+  int64 expires_at = 4;
+}
+
+message AudioConfig {
+  int32 sample_rate = 1;  // e.g., 16000 for 16kHz
+  int32 channels = 2;      // 1 for mono, 2 for stereo
+  int32 bit_depth = 3;     // e.g., 16 for 16-bit PCM
+  string codec = 4;        // e.g., "opus", "pcm"
+}
+
+message VoiceConfig {
+  string voice_id = 1;
+  float speed = 2;         // Playback speed multiplier
+  float pitch = 3;         // Pitch adjustment
+  string language = 4;     // Language code (e.g., "en-US")
+}
