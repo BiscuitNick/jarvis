@@ -36,10 +36,14 @@ class VoiceActivityDetector: ObservableObject {
     var onVoiceActivityChanged: ((Bool) -> Void)?
 
     func startDetection() throws {
-        let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
+        // Use actual hardware format to avoid format mismatch
+        guard let format = AudioFormatHelper.createHardwareFormat() else {
+            throw NSError(domain: "VoiceActivityDetector", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create audio format"])
+        }
 
-        // Install tap with 20ms buffer (960 frames at 48kHz)
+        let inputNode = audioEngine.inputNode
+
+        // Install tap with 20ms buffer (e.g., 320 frames at 16kHz, 960 frames at 48kHz)
         inputNode.installTap(onBus: 0, bufferSize: chunkSize, format: format) { [weak self] buffer, time in
             guard let self = self else { return }
 

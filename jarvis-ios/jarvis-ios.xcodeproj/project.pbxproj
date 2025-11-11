@@ -290,6 +290,7 @@
 				CODE_SIGN_ENTITLEMENTS = "jarvis-ios/jarvis_ios.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GRDX6H9J6J;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "jarvis-ios/Info.plist";
@@ -323,6 +324,7 @@
 				CODE_SIGN_ENTITLEMENTS = "jarvis-ios/jarvis_ios.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GRDX6H9J6J;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "jarvis-ios/Info.plist";

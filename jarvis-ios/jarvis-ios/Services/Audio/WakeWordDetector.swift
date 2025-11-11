@@ -46,6 +46,12 @@ class WakeWordDetector: ObservableObject {
             recognitionTask = nil
         }
 
+        // Stop audio engine and remove any existing tap
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        audioEngine.inputNode.removeTap(onBus: 0)
+
         // Configure audio session for recording
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -73,15 +79,24 @@ class WakeWordDetector: ObservableObject {
             }
 
             if error != nil || result?.isFinal == true {
-                self.audioEngine.stop()
+                // Stop engine first
+                if self.audioEngine.isRunning {
+                    self.audioEngine.stop()
+                }
+
+                // Remove tap AFTER engine is stopped
                 inputNode.removeTap(onBus: 0)
+
                 self.recognitionRequest = nil
                 self.recognitionTask = nil
             }
         }
 
-        // Configure audio tap
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        // Configure audio tap - use actual hardware format
+        guard let recordingFormat = AudioFormatHelper.createHardwareFormat() else {
+            throw WakeWordError.audioEngineNotAvailable
+        }
+
         inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: recordingFormat) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
         }
@@ -93,11 +108,21 @@ class WakeWordDetector: ObservableObject {
     }
 
     func stopListening() {
-        audioEngine.stop()
+        // End audio for the recognition request first
         recognitionRequest?.endAudio()
+
+        // Cancel recognition task
+        recognitionTask?.cancel()
+
+        // Stop the audio engine
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+
+        // Remove tap AFTER engine is stopped
         audioEngine.inputNode.removeTap(onBus: 0)
 
-        recognitionTask?.cancel()
+        // Clean up
         recognitionTask = nil
         recognitionRequest = nil
 

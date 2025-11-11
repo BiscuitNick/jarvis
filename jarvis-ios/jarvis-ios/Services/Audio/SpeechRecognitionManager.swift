@@ -50,10 +50,25 @@ class SpeechRecognitionManager: ObservableObject {
         recognitionTask?.cancel()
         recognitionTask = nil
 
-        // Configure audio session
+        // Stop audio engine and remove any existing tap
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+
+        // Remove any existing tap (ignore if none exists)
+        let inputNode = audioEngine.inputNode
+        inputNode.removeTap(onBus: 0)
+
+        // Configure audio session ONLY if not already active
+        // This prevents conflicting with AudioManager's configuration
         let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        if !audioSession.isOtherAudioPlaying && audioSession.category != .playAndRecord {
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        } else {
+            // Use existing session configuration
+            print("📱 Using existing audio session configuration")
+        }
 
         // Create recognition request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -70,8 +85,11 @@ class SpeechRecognitionManager: ObservableObject {
             recognitionRequest.taskHint = .dictation
         }
 
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        // CRITICAL: Use the HARDWARE format, not the node's preferred format
+        guard let recordingFormat = AudioFormatHelper.createHardwareFormat() else {
+            throw SpeechRecognitionError.audioEngineNotAvailable
+        }
+        print("🎙️ Using hardware format: \(recordingFormat.sampleRate)Hz, \(recordingFormat.channelCount) channels")
 
         // Start recognition task
         recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
@@ -101,8 +119,14 @@ class SpeechRecognitionManager: ObservableObject {
                 }
 
                 if error != nil || result?.isFinal == true {
-                    self.audioEngine.stop()
+                    // Stop engine first
+                    if self.audioEngine.isRunning {
+                        self.audioEngine.stop()
+                    }
+
+                    // Remove tap AFTER engine is stopped
                     inputNode.removeTap(onBus: 0)
+
                     self.recognitionRequest = nil
                     self.recognitionTask = nil
                     self.isRecognizing = false
@@ -123,11 +147,21 @@ class SpeechRecognitionManager: ObservableObject {
     }
 
     func stopRecognition() {
-        audioEngine.stop()
+        // End audio for the recognition request first
         recognitionRequest?.endAudio()
+
+        // Cancel recognition task
+        recognitionTask?.cancel()
+
+        // Stop the audio engine
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+
+        // Remove tap AFTER engine is stopped
         audioEngine.inputNode.removeTap(onBus: 0)
 
-        recognitionTask?.cancel()
+        // Clean up
         recognitionTask = nil
         recognitionRequest = nil
 

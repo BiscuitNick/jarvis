@@ -276,9 +276,11 @@ class VoiceAssistantViewModel: ObservableObject {
         switch recognitionMode {
         case .privacyMode, .standardMode:
             // Use native speech recognition
+            // NOTE: Do NOT call audioManager.startRecording() as it conflicts with speech recognizer's audio engine
             do {
                 try speechRecognitionManager.startRecognition()
-                audioManager.startRecording() // For UI feedback
+                // Just update UI state without starting audio manager
+                audioManager.isRecording = true
             } catch {
                 print("❌ Failed to start speech recognition: \(error)")
                 recognitionError = error.localizedDescription
@@ -296,7 +298,8 @@ class VoiceAssistantViewModel: ObservableObject {
         case .privacyMode, .standardMode:
             // Stop native speech recognition
             speechRecognitionManager.stopRecognition()
-            audioManager.stopRecording()
+            // Just update UI state
+            audioManager.isRecording = false
 
         case .professionalMode:
             // Stop WebRTC streaming
