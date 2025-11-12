@@ -9,6 +9,12 @@ dev-debug.log
 # Dependency directories
 node_modules/
 
+# TypeScript build output
+dist/
+*.tsbuildinfo
+*.d.ts.map
+*.js.map
+
 # Environment variables
 .env
 .env.local
@@ -107,6 +113,7 @@ Packages/
 Package.pins
 Package.resolved
 *.xcodeproj
+.swift-module-cache/
 
 ## CocoaPods
 Pods/

@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import AVFoundation
 
 // MARK: - Recognition Mode
 
@@ -75,6 +76,7 @@ class VoiceAssistantViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var currentTranscriptAdded = false // Track if current transcript was added to messages
+    private let speechSynthesizer = AVSpeechSynthesizer() // Keep synthesizer alive for TTS
 
     init(
         audioManager: AudioManager,
@@ -231,10 +233,82 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     private func sendTranscriptToBackend(_ transcript: String) async {
-        // TODO: Implement gRPC message sending
         print("📤 Sending transcript to backend: \(transcript)")
-        // This will be implemented when gRPC streaming is ready
-        // try? await grpcClient.sendUserMessage(transcript)
+
+        do {
+            // DISABLED AUTH - Using dummy token for testing
+            let accessToken = "dummy-token-for-testing"
+            print("⚠️ Auth disabled - using test token")
+
+            // Call chat API
+            let url = AppEnvironment.apiURL(path: "/api/chat/message")
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            let body: [String: Any] = [
+                "message": transcript,
+                "intent": "conversational"
+            ]
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+            print("🌐 Calling chat API at \(url.absoluteString)...")
+            let session = AppEnvironment.makeURLSession()
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid response")
+                return
+            }
+
+            print("📡 Response status: \(httpResponse.statusCode)")
+
+            guard httpResponse.statusCode == 200 else {
+                if let errorText = String(data: data, encoding: .utf8) {
+                    print("❌ API error: \(errorText)")
+                }
+                addSystemMessage("Error: Failed to get response")
+                return
+            }
+
+            // Parse response
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let content = json?["content"] as? String else {
+                print("❌ No content in response")
+                return
+            }
+
+            print("✅ Got response: \(content)")
+
+            // Add to messages
+            addAssistantMessage(content)
+
+            // Speak the response using iOS native TTS
+            speakText(content)
+
+        } catch {
+            print("❌ Error sending transcript: \(error)")
+            addSystemMessage("Error: \(error.localizedDescription)")
+        }
+    }
+
+    private func speakText(_ text: String) {
+        // Stop any ongoing speech first
+        if speechSynthesizer.isSpeaking {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.5
+        utterance.pitchMultiplier = 1.0
+        utterance.volume = 1.0
+
+        speechSynthesizer.speak(utterance)
+
+        print("🔊 Speaking response: \(text.prefix(50))...")
     }
 
     func startWakeWordDetection() async {
@@ -337,6 +411,11 @@ class VoiceAssistantViewModel: ObservableObject {
                 addUserMessage(transcript)
                 currentTranscriptAdded = true
                 print("   Message added, messages count: \(messages.count)")
+
+                // Send to backend for native speech modes
+                Task {
+                    await sendTranscriptToBackend(transcript)
+                }
             } else if currentTranscriptAdded {
                 print("ℹ️ Transcript already added via callback")
             } else if transcript.isEmpty {
@@ -501,4 +580,5 @@ class VoiceAssistantViewModel: ObservableObject {
         // For testing - generate random amplitudes
         audioAmplitudes = (0..<50).map { _ in Float.random(in: 0.1...0.9) }
     }
+
 }

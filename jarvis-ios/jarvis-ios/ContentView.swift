@@ -11,11 +11,10 @@ struct ContentView: View {
     @StateObject private var viewModel: VoiceAssistantViewModel
     @State private var showSettings = false
 
-    init() {
+    init(authService: AuthenticationService) {
         let audioManager = AudioManager()
         let webRTCClient = WebRTCClient()
         let grpcClient = GRPCClient()
-        let authService = AuthenticationService()
         let speechRecognitionManager = SpeechRecognitionManager()
 
         _viewModel = StateObject(wrappedValue: VoiceAssistantViewModel(
@@ -90,23 +89,8 @@ struct ContentView: View {
                             if viewModel.isListening {
                                 viewModel.stopListening()
                                 // Note: Message is already added by the speech recognition callback
-                                // when the transcript is final, so we don't add it again here
-
-                                // Simulate assistant response for testing
-                                Task {
-                                    viewModel.startStreaming()
-                                    try? await Task.sleep(for: .seconds(1))
-                                    viewModel.addAssistantMessage(
-                                        "I'm processing your request. This is a test response.",
-                                        sources: [
-                                            Citation(
-                                                title: "Example Source",
-                                                url: "https://example.com",
-                                                snippet: "This is a sample citation"
-                                            )
-                                        ]
-                                    )
-                                }
+                                // when the transcript is final, and the backend response is handled
+                                // automatically via sendTranscriptToBackend()
                             } else {
                                 viewModel.startListening()
                             }
@@ -129,22 +113,31 @@ struct ContentView: View {
                 SettingsView(viewModel: viewModel)
             }
             .task {
-                do {
-                    // Request speech recognition permissions
-                    let speechAuthorized = await viewModel.requestSpeechPermissions()
-                    if speechAuthorized {
-                        print("✅ Speech recognition authorized")
-                    } else {
-                        print("❌ Speech recognition not authorized")
-                        viewModel.addSystemMessage("Speech recognition requires microphone permissions")
-                    }
+                // Run initialization in background without blocking UI
+                Task.detached(priority: .userInitiated) {
+                    do {
+                        // Request speech recognition permissions
+                        let speechAuthorized = await viewModel.requestSpeechPermissions()
+                        await MainActor.run {
+                            if speechAuthorized {
+                                print("✅ Speech recognition authorized")
+                            } else {
+                                print("❌ Speech recognition not authorized")
+                                viewModel.addSystemMessage("Speech recognition requires microphone permissions")
+                            }
+                        }
 
-                    // Authenticate with backend
-                    try await viewModel.authenticate()
-                    viewModel.addSystemMessage("System initialized. Ready to use.")
-                } catch {
-                    print("Authentication failed: \(error)")
-                    viewModel.addSystemMessage("Authentication failed: \(error.localizedDescription)")
+                        // Authenticate with backend
+                        try await viewModel.authenticate()
+                        await MainActor.run {
+                            viewModel.addSystemMessage("System initialized. Ready to use.")
+                        }
+                    } catch {
+                        print("Authentication failed: \(error)")
+                        await MainActor.run {
+                            viewModel.addSystemMessage("Authentication failed: \(error.localizedDescription)")
+                        }
+                    }
                 }
             }
         }
@@ -183,5 +176,5 @@ struct RecognitionModeIndicator: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(authService: AuthenticationService())
 }

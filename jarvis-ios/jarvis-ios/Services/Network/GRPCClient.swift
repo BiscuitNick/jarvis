@@ -30,7 +30,7 @@ class GRPCClient: ObservableObject {
     private let maxRetries = 3
     private let retryDelay: TimeInterval = 2.0
 
-    init(baseURL: String = "http://localhost:50051") {
+    init(baseURL: String = "http://10.10.0.44:50051") {
         self.baseURL = baseURL
 
         // Configure URLSession for HTTP/2 and gRPC
