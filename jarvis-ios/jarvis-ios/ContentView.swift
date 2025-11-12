@@ -11,11 +11,10 @@ struct ContentView: View {
     @StateObject private var viewModel: VoiceAssistantViewModel
     @State private var showSettings = false
 
-    init() {
+    init(authService: AuthenticationService) {
         let audioManager = AudioManager()
         let webRTCClient = WebRTCClient()
         let grpcClient = GRPCClient()
-        let authService = AuthenticationService()
         let speechRecognitionManager = SpeechRecognitionManager()
 
         _viewModel = StateObject(wrappedValue: VoiceAssistantViewModel(
@@ -183,5 +182,5 @@ struct RecognitionModeIndicator: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(authService: AuthenticationService())
 }

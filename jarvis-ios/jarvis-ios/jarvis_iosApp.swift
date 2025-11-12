@@ -11,17 +11,13 @@ import SwiftUI
 struct jarvis_iosApp: App {
     @StateObject private var authService = AuthenticationService()
 
-    init() {
-        // Automatically register device on first launch
-        Task {
-            await registerDeviceIfNeeded()
-        }
-    }
-
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(authService)
+            ContentView(authService: authService)
+                .task {
+                    // Automatically register device on first launch
+                    await registerDeviceIfNeeded()
+                }
         }
     }
 

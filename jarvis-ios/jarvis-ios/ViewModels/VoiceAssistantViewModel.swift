@@ -235,19 +235,12 @@ class VoiceAssistantViewModel: ObservableObject {
         print("📤 Sending transcript to backend: \(transcript)")
 
         do {
-            // Get access token
-            guard let accessToken = authService.getAccessToken() else {
-                print("❌ No access token available")
-                await addMessage("Error: Not authenticated", isUser: false)
-                return
-            }
+            // DISABLED AUTH - Using dummy token for testing
+            let accessToken = "dummy-token-for-testing"
+            print("⚠️ Auth disabled - using test token")
 
             // Call chat API
-            let baseURL = "https://terese-gableended-underfoot.ngrok-free.dev"
-            guard let url = URL(string: "\(baseURL)/api/chat/message") else {
-                print("❌ Invalid URL")
-                return
-            }
+            let url = AppEnvironment.apiURL(path: "/api/chat/message")
 
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -260,8 +253,9 @@ class VoiceAssistantViewModel: ObservableObject {
             ]
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-            print("🌐 Calling chat API...")
-            let (data, response) = try await URLSession.shared.data(for: request)
+            print("🌐 Calling chat API at \(url.absoluteString)...")
+            let session = AppEnvironment.makeURLSession()
+            let (data, response) = try await session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 print("❌ Invalid response")
@@ -274,7 +268,7 @@ class VoiceAssistantViewModel: ObservableObject {
                 if let errorText = String(data: data, encoding: .utf8) {
                     print("❌ API error: \(errorText)")
                 }
-                await addMessage("Error: Failed to get response", isUser: false)
+                addSystemMessage("Error: Failed to get response")
                 return
             }
 
@@ -288,14 +282,14 @@ class VoiceAssistantViewModel: ObservableObject {
             print("✅ Got response: \(content)")
 
             // Add to messages
-            await addMessage(content, isUser: false)
+            addAssistantMessage(content)
 
             // Speak the response using iOS native TTS
             speakText(content)
 
         } catch {
             print("❌ Error sending transcript: \(error)")
-            await addMessage("Error: \(error.localizedDescription)", isUser: false)
+            addSystemMessage("Error: \(error.localizedDescription)")
         }
     }
 
@@ -412,6 +406,11 @@ class VoiceAssistantViewModel: ObservableObject {
                 addUserMessage(transcript)
                 currentTranscriptAdded = true
                 print("   Message added, messages count: \(messages.count)")
+
+                // Send to backend for native speech modes
+                Task {
+                    await sendTranscriptToBackend(transcript)
+                }
             } else if currentTranscriptAdded {
                 print("ℹ️ Transcript already added via callback")
             } else if transcript.isEmpty {
@@ -576,4 +575,5 @@ class VoiceAssistantViewModel: ObservableObject {
         // For testing - generate random amplitudes
         audioAmplitudes = (0..<50).map { _ in Float.random(in: 0.1...0.9) }
     }
+
 }

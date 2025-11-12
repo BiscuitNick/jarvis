@@ -99,10 +99,7 @@ class AuthenticationService: ObservableObject {
         }
 
         // Call backend API to register device
-        let baseURL = "https://terese-gableended-underfoot.ngrok-free.dev"
-        guard let url = URL(string: "\(baseURL)/api/auth/register") else {
-            throw KeychainError.invalidURL
-        }
+        let url = AppEnvironment.apiURL(path: "/api/auth/register")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -111,8 +108,9 @@ class AuthenticationService: ObservableObject {
         let body = ["deviceIdentifier": deviceId]
         request.httpBody = try JSONEncoder().encode(body)
 
-        print("🔐 Registering device with backend...")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        print("🔐 Registering device with backend at \(url.absoluteString)...")
+        let session = AppEnvironment.makeURLSession()
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 201 else {
             throw KeychainError.registrationFailed
