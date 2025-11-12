@@ -100,8 +100,6 @@ struct SettingsView: View {
                         }
                     ))
 
-                    Toggle("Audio Visualization", isOn: $viewModel.audioVisualizationEnabled)
-
                     if viewModel.vadLatency > 0 {
                         HStack {
                             Text("VAD Latency")

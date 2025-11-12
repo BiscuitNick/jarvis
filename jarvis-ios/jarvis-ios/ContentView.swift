@@ -39,35 +39,16 @@ struct ContentView: View {
 
                 VStack(spacing: 0) {
                     // Status Bar
-                    VStack(spacing: 8) {
-                        StatusBar(
-                            wakeWordEnabled: viewModel.wakeWordEnabled,
-                            voiceActivityDetected: viewModel.voiceActivityDetected,
-                            webRTCConnected: viewModel.webRTCConnected,
-                            grpcConnected: viewModel.grpcConnected,
-                            vadLatency: viewModel.vadLatency,
-                            bytesSent: viewModel.bytesSent
-                        )
-
-                        // Recognition Mode Indicator
-                        HStack {
-                            RecognitionModeIndicator(mode: viewModel.recognitionMode)
-                            Spacer()
-                        }
-                    }
+                    StatusBar(
+                        wakeWordEnabled: viewModel.wakeWordEnabled,
+                        voiceActivityDetected: viewModel.voiceActivityDetected,
+                        webRTCConnected: viewModel.webRTCConnected,
+                        grpcConnected: viewModel.grpcConnected,
+                        vadLatency: viewModel.vadLatency,
+                        bytesSent: viewModel.bytesSent
+                    )
                     .padding(.horizontal)
                     .padding(.top, 8)
-
-                    // Waveform Visualization
-                    if viewModel.audioVisualizationEnabled {
-                        WaveformView(
-                            amplitudes: viewModel.audioAmplitudes,
-                            isActive: viewModel.audioStreamActive || viewModel.isListening
-                        )
-                        .frame(height: 80)
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                    }
 
                     // Transcript Area
                     TranscriptView(
