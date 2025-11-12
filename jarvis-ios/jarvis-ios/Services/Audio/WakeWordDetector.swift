@@ -60,12 +60,14 @@ class WakeWordDetector: ObservableObject {
         }
         audioEngine.inputNode.removeTap(onBus: 0)
 
-        // Configure audio session for recording
+        // Just ensure audio session is active, don't reconfigure it
+        // AudioManager already set it to .playAndRecord which supports both recording and TTS
         let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        if !audioSession.isOtherAudioPlaying {
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        }
 
-        print("🎤 WakeWordDetector: Audio session configured")
+        print("🎤 WakeWordDetector: Using existing audio session (category: \(audioSession.category.rawValue))")
 
         // Create recognition request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()

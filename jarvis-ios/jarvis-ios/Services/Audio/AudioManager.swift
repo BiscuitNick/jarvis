@@ -282,9 +282,15 @@ class AudioManager: ObservableObject {
     }
 
     private func setupBindings() {
+        // Don't bind wakeWordEnabled to isListening!
+        // wakeWordEnabled is the user's preference (from settings toggle)
+        // isListening is the current detector state (can be temporarily false)
+        // These are separate concerns and shouldn't be linked
+
+        // Just observe for logging/debugging if needed
         wakeWordDetector.$isListening
-            .sink { [weak self] listening in
-                self?.wakeWordEnabled = listening
+            .sink { listening in
+                print("🔄 AudioManager: Wake word detector listening state: \(listening)")
             }
             .store(in: &cancellables)
 

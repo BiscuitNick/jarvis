@@ -134,11 +134,9 @@ class VoiceAssistantViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        audioManager.$wakeWordEnabled
-            .sink { [weak self] enabled in
-                self?.wakeWordEnabled = enabled
-            }
-            .store(in: &cancellables)
+        // Don't bind wakeWordEnabled from AudioManager
+        // We manage this state explicitly through startWakeWordDetection/stopWakeWordDetection
+        // to avoid confusion between user preference and detector state
 
         // Observe wake word detection from AudioManager's WakeWordDetector
         audioManager.wakeWordDetector.$wakeWordDetected
@@ -349,6 +347,21 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     private func speakText(_ text: String) {
+        // Ensure audio session supports playback
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            // Verify we're in playAndRecord mode for TTS to work
+            if audioSession.category != .playAndRecord {
+                print("⚠️ TTS: Audio session not in playAndRecord mode, fixing...")
+                try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers])
+            }
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            print("🔊 TTS: Audio session ready (category: \(audioSession.category.rawValue))")
+        } catch {
+            print("❌ Failed to prepare audio session for TTS: \(error)")
+            return
+        }
+
         // Stop any ongoing speech first
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)
@@ -375,16 +388,25 @@ class VoiceAssistantViewModel: ObservableObject {
 
     func startWakeWordDetection() async {
         print("📢 VoiceAssistantViewModel: Starting wake word detection (user enabled)")
+        // Set the user preference flag
+        audioManager.wakeWordEnabled = true
+        wakeWordEnabled = true
         do {
             try await audioManager.startWakeWordDetection()
             print("✅ VoiceAssistantViewModel: Wake word detection started")
         } catch {
             print("❌ Failed to start wake word detection: \(error)")
+            // Reset flags on failure
+            audioManager.wakeWordEnabled = false
+            wakeWordEnabled = false
         }
     }
 
     func stopWakeWordDetection() {
         print("📢 VoiceAssistantViewModel: Stopping wake word detection (user disabled)")
+        // Clear the user preference flag
+        audioManager.wakeWordEnabled = false
+        wakeWordEnabled = false
         audioManager.stopWakeWordDetection()
     }
 
@@ -498,8 +520,24 @@ class VoiceAssistantViewModel: ObservableObject {
         if wakeWordEnabled {
             print("🔄 VoiceAssistantViewModel: User has wake word enabled, restarting detection...")
             Task {
-                // Small delay to ensure audio resources are released
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                // Longer delay to ensure all audio resources released and TTS can finish
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1.0 second
+
+                // Check if TTS is speaking and wait for it to finish
+                if self.speechSynthesizer.isSpeaking {
+                    print("🔊 TTS is speaking, waiting to restart wake word...")
+                    // Wait for TTS to finish
+                    var attempts = 0
+                    while self.speechSynthesizer.isSpeaking && attempts < 20 {  // Max 10 seconds wait
+                        try? await Task.sleep(nanoseconds: 500_000_000)  // Check every 0.5 seconds
+                        attempts += 1
+                    }
+                    if attempts >= 20 {
+                        print("⚠️ TTS took too long, proceeding with wake word restart")
+                    } else {
+                        print("✅ TTS finished, now restarting wake word")
+                    }
+                }
 
                 // Only restart if it's not already listening (avoid duplicate starts)
                 if !audioManager.wakeWordDetector.isListening {
