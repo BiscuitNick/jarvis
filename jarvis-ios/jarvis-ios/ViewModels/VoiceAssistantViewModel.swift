@@ -76,6 +76,7 @@ class VoiceAssistantViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var currentTranscriptAdded = false // Track if current transcript was added to messages
+    private let speechSynthesizer = AVSpeechSynthesizer() // Keep synthesizer alive for TTS
 
     init(
         audioManager: AudioManager,
@@ -294,16 +295,20 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     private func speakText(_ text: String) {
+        // Stop any ongoing speech first
+        if speechSynthesizer.isSpeaking {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
         utterance.rate = 0.5
         utterance.pitchMultiplier = 1.0
         utterance.volume = 1.0
 
-        let synthesizer = AVSpeechSynthesizer()
-        synthesizer.speak(utterance)
+        speechSynthesizer.speak(utterance)
 
-        print("🔊 Speaking response")
+        print("🔊 Speaking response: \(text.prefix(50))...")
     }
 
     func startWakeWordDetection() async {
