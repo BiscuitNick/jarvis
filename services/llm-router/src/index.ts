@@ -131,7 +131,12 @@ app.post('/complete', async (req, res) => {
       latency,
       usage: response.usage,
       grounding: groundingValidation,
-      sources: context?.documents.map((d) => d.source) || [],
+      sources: context?.documents.map((d) => ({
+        url: d.source,
+        title: d.metadata?.title || d.source,
+        excerpt: d.content.substring(0, 200) + (d.content.length > 200 ? '...' : ''),
+        relevance: d.relevance
+      })) || [],
     });
   } catch (error: any) {
     console.error('[llm-router] Completion error:', error);
@@ -226,7 +231,12 @@ app.post('/complete/stream', async (req, res) => {
           done: true,
           latency,
           intent,
-          sources: context?.documents.map((d: any) => d.source) || [],
+          sources: context?.documents.map((d: any) => ({
+            url: d.source,
+            title: d.metadata?.title || d.source,
+            excerpt: d.content.substring(0, 200) + (d.content.length > 200 ? '...' : ''),
+            relevance: d.relevance
+          })) || [],
           grounding: groundingValidation,
           citations:
             intent === IntentType.CRITICAL && context

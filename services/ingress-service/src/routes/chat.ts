@@ -2,6 +2,7 @@
  * chat.ts
  *
  * Text-based chat API routes for iOS app integration
+ * Now with full RAG support and intent classification
  */
 
 import express, { Request, Response } from 'express';
@@ -14,13 +15,71 @@ const router = express.Router();
 
 const LLM_ROUTER_URL = process.env.LLM_ROUTER_URL || 'http://llm-router:3003';
 
+// Intent classification logic (matching llm-router)
+const CRITICAL_KEYWORDS = [
+  'how',
+  'what',
+  'explain',
+  'describe',
+  'tell me about',
+  'information about',
+  'details about',
+  'show me',
+  'find',
+  'search',
+  'lookup',
+  'documentation',
+  'docs',
+  'api',
+  'function',
+  'method',
+  'class',
+  'code',
+  'implementation',
+  'example',
+  'tutorial',
+  'guide',
+];
+
+function classifyIntent(query: string): 'critical' | 'conversational' {
+  const lowerQuery = query.toLowerCase();
+
+  // Check for critical keywords
+  for (const keyword of CRITICAL_KEYWORDS) {
+    if (lowerQuery.includes(keyword)) {
+      return 'critical';
+    }
+  }
+
+  // Check for question patterns
+  const questionPatterns = [/^(what|how|why|when|where|who|which)\s/i, /\?$/];
+
+  for (const pattern of questionPatterns) {
+    if (pattern.test(query)) {
+      return 'critical';
+    }
+  }
+
+  // Check for casual greetings
+  const casualPatterns = [/^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure)\s*[!.]?$/i];
+
+  for (const pattern of casualPatterns) {
+    if (pattern.test(query.trim())) {
+      return 'conversational';
+    }
+  }
+
+  // Default to critical to ensure RAG is used when uncertain
+  return 'critical';
+}
+
 /**
  * Send a text message and get LLM response
  * POST /api/chat/message
  */
 router.post('/message', async (req: Request, res: Response) => {
   try {
-    const { message, conversationId, intent } = req.body;
+    const { message, conversationId, intent: userProvidedIntent } = req.body;
     // AUTH DISABLED - Using dummy userId for testing (valid UUID format)
     const userId = '00000000-0000-0000-0000-000000000001'; // (req as any).userId; // Set by auth middleware
 
@@ -58,14 +117,17 @@ router.post('/message', async (req: Request, res: Response) => {
       content: message,
     });
 
-    // Call LLM router
-    logger.info({ userId, messageId, conversationId }, 'Sending message to LLM');
+    // Classify intent automatically (unless explicitly provided)
+    const intent = userProvidedIntent || classifyIntent(message);
+
+    // Call LLM router with proper intent classification
+    logger.info({ userId, messageId, conversationId, intent, message: message.substring(0, 100) }, 'Sending message to LLM with RAG');
 
     const llmResponse = await axios.post(
       `${LLM_ROUTER_URL}/complete`,
       {
         messages,
-        intent: intent || 'conversational',
+        intent, // Now properly classified to trigger RAG when needed
         temperature: 0.7,
         maxTokens: 1000,
       },
@@ -77,7 +139,7 @@ router.post('/message', async (req: Request, res: Response) => {
       }
     );
 
-    const { content, provider, model, latency, sources } = llmResponse.data;
+    const { content, provider, model, latency, sources, grounding, usage } = llmResponse.data;
 
     // Store messages in database (skip for test user)
     const isTestUser = userId === '00000000-0000-0000-0000-000000000001';
@@ -118,23 +180,38 @@ router.post('/message', async (req: Request, res: Response) => {
       );
     }
 
-    // Return response
+    // Return response with full RAG metadata
     res.json({
       messageId: assistantMessageId,
       conversationId: actualConversationId,
       content,
       timestamp,
+      intent, // Include classified intent for debugging
       metadata: {
         provider,
         model,
         latency,
         sources: sources || [],
+        grounding: grounding || null,
+        usage: usage || null,
       },
+      // Make sources easily accessible at top level for iOS app
+      sources: sources || [],
+      isGrounded: grounding?.isGrounded || false,
+      groundingConfidence: grounding?.confidence || 0,
     });
 
     logger.info(
-      { userId, messageId, conversationId: actualConversationId, latency },
-      'Chat message completed'
+      {
+        userId,
+        messageId,
+        conversationId: actualConversationId,
+        latency,
+        intent,
+        sourceCount: sources?.length || 0,
+        isGrounded: grounding?.isGrounded,
+      },
+      'Chat message completed with RAG'
     );
   } catch (error: any) {
     logger.error({ error, userId: (req as any).userId }, 'Chat message failed');

@@ -301,8 +301,8 @@ class VoiceAssistantViewModel: ObservableObject {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
             let body: [String: Any] = [
-                "message": transcript,
-                "intent": "conversational"
+                "message": transcript
+                // Let backend auto-classify intent to enable RAG for critical queries
             ]
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -334,8 +334,30 @@ class VoiceAssistantViewModel: ObservableObject {
 
             print("✅ Got response: \(content)")
 
-            // Add to messages
-            addAssistantMessage(content)
+            // Parse sources/citations if available
+            var citations: [Citation]? = nil
+            if let sources = json?["sources"] as? [[String: Any]], !sources.isEmpty {
+                citations = sources.compactMap { sourceDict in
+                    guard let url = sourceDict["url"] as? String ?? sourceDict["source"] as? String else {
+                        return nil
+                    }
+                    return Citation(
+                        title: sourceDict["title"] as? String ?? "Source",
+                        url: url,
+                        snippet: sourceDict["excerpt"] as? String ?? sourceDict["snippet"] as? String
+                    )
+                }
+                print("📚 Retrieved \(citations?.count ?? 0) citations")
+            }
+
+            // Log grounding info if available
+            if let isGrounded = json?["isGrounded"] as? Bool {
+                let confidence = json?["groundingConfidence"] as? Double ?? 0.0
+                print("🎯 Response grounding: \(isGrounded) (confidence: \(String(format: "%.2f", confidence)))")
+            }
+
+            // Add to messages with citations
+            addAssistantMessage(content, sources: citations)
 
             // Speak the response using iOS native TTS
             speakText(content)
