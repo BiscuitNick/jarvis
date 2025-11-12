@@ -68,6 +68,13 @@ class VoiceAssistantViewModel: ObservableObject {
     @Published var isRecognizing = false
     @Published var recognitionError: String?
 
+    // Text-to-Speech
+    @Published var selectedVoiceIdentifier: String {
+        didSet {
+            UserDefaults.standard.set(selectedVoiceIdentifier, forKey: "selectedVoiceIdentifier")
+        }
+    }
+
     let audioManager: AudioManager
     let webRTCClient: WebRTCClient
     let grpcClient: GRPCClient
@@ -98,6 +105,22 @@ class VoiceAssistantViewModel: ObservableObject {
         } else {
             // Default to privacy mode for best privacy and reliability
             self.recognitionMode = .privacyMode
+        }
+
+        // Load saved voice preference or use default
+        if let savedVoice = UserDefaults.standard.string(forKey: "selectedVoiceIdentifier") {
+            self.selectedVoiceIdentifier = savedVoice
+        } else {
+            // Default to first available enhanced/premium English voice, or any English voice as fallback
+            let allEnglishVoices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.starts(with: "en") }
+            let enhancedVoices = allEnglishVoices.filter { $0.quality == .enhanced || $0.quality == .premium }
+
+            if let defaultVoice = enhancedVoices.first ?? allEnglishVoices.first {
+                self.selectedVoiceIdentifier = defaultVoice.identifier
+            } else {
+                // Ultimate fallback
+                self.selectedVoiceIdentifier = "com.apple.ttsbundle.Samantha-compact"
+            }
         }
 
         setupBindings()
@@ -301,14 +324,22 @@ class VoiceAssistantViewModel: ObservableObject {
         }
 
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+
+        // Use selected voice or fallback to default
+        if let voice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+            utterance.voice = voice
+        } else {
+            // Fallback to default US English voice
+            utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        }
+
         utterance.rate = 0.5
         utterance.pitchMultiplier = 1.0
         utterance.volume = 1.0
 
         speechSynthesizer.speak(utterance)
 
-        print("🔊 Speaking response: \(text.prefix(50))...")
+        print("🔊 Speaking response with voice \(selectedVoiceIdentifier): \(text.prefix(50))...")
     }
 
     func startWakeWordDetection() async {
@@ -581,4 +612,65 @@ class VoiceAssistantViewModel: ObservableObject {
         audioAmplitudes = (0..<50).map { _ in Float.random(in: 0.1...0.9) }
     }
 
+    // MARK: - Text-to-Speech
+
+    /// Get all available English voices grouped by language/region
+    static func getAvailableVoices() -> [VoiceGroup] {
+        let allVoices = AVSpeechSynthesisVoice.speechVoices()
+
+        // Filter for English voices only
+        let allEnglishVoices = allVoices.filter { voice in
+            voice.language.starts(with: "en")
+        }
+
+        // Prefer Enhanced/Premium quality, but include Standard if no high-quality voices available
+        var englishVoices = allEnglishVoices.filter { voice in
+            voice.quality == .enhanced || voice.quality == .premium
+        }
+
+        // If no Enhanced/Premium voices, fall back to all English voices
+        if englishVoices.isEmpty {
+            englishVoices = allEnglishVoices
+        }
+
+        // Group by language
+        var groupedVoices: [String: [AVSpeechSynthesisVoice]] = [:]
+        for voice in englishVoices {
+            let language = voice.language
+            if groupedVoices[language] == nil {
+                groupedVoices[language] = []
+            }
+            groupedVoices[language]?.append(voice)
+        }
+
+        // Convert to VoiceGroup array
+        return groupedVoices.map { (language, voices) in
+            VoiceGroup(
+                language: language,
+                languageName: languageDisplayName(for: language),
+                voices: voices.sorted { $0.name < $1.name }
+            )
+        }.sorted { $0.languageName < $1.languageName }
+    }
+
+    private static func languageDisplayName(for code: String) -> String {
+        switch code {
+        case "en-US": return "English (US)"
+        case "en-GB": return "English (UK)"
+        case "en-AU": return "English (Australia)"
+        case "en-IE": return "English (Ireland)"
+        case "en-ZA": return "English (South Africa)"
+        case "en-IN": return "English (India)"
+        default: return code
+        }
+    }
+}
+
+// MARK: - Voice Models
+
+struct VoiceGroup: Identifiable {
+    let id = UUID()
+    let language: String
+    let languageName: String
+    let voices: [AVSpeechSynthesisVoice]
 }

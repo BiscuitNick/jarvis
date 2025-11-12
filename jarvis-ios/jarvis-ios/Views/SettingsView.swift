@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import AVFoundation
 
 struct SettingsView: View {
     @ObservedObject var viewModel: VoiceAssistantViewModel
     @Environment(\.dismiss) var dismiss
+    @State private var voiceGroups: [VoiceGroup] = []
 
     var body: some View {
         NavigationView {
@@ -29,6 +31,29 @@ struct SettingsView: View {
                     Text("Speech Recognition Mode")
                 } footer: {
                     Text(viewModel.recognitionMode.description)
+                        .font(.caption)
+                }
+
+                // Voice Selection Section
+                Section {
+                    NavigationLink(destination: VoiceSelectionView(viewModel: viewModel, voiceGroups: voiceGroups)) {
+                        HStack {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .foregroundColor(.secondary)
+
+                            Text("Voice")
+
+                            Spacer()
+
+                            Text(selectedVoiceName)
+                                .foregroundColor(.secondary)
+                                .font(.callout)
+                        }
+                    }
+                } header: {
+                    Text("Text-to-Speech")
+                } footer: {
+                    Text("Choose the voice for agent responses. Enhanced and Premium voices offer better quality.")
                         .font(.caption)
                 }
 
@@ -133,7 +158,19 @@ struct SettingsView: View {
                     }
                 }
             }
+            .onAppear {
+                // Load available voices on appear
+                voiceGroups = VoiceAssistantViewModel.getAvailableVoices()
+            }
         }
+    }
+
+    private var selectedVoiceName: String {
+        // Find the selected voice name from the identifier
+        if let voice = AVSpeechSynthesisVoice(identifier: viewModel.selectedVoiceIdentifier) {
+            return voice.name
+        }
+        return "Default"
     }
 }
 
@@ -211,6 +248,157 @@ struct StatusRow: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+        }
+    }
+}
+
+// MARK: - Voice Selection View
+
+struct VoiceSelectionView: View {
+    @ObservedObject var viewModel: VoiceAssistantViewModel
+    let voiceGroups: [VoiceGroup]
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        List {
+            // Info section for downloading better voices
+            if hasOnlyStandardVoices {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(.blue)
+                            Text("Download Better Voices")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+
+                        Text("For higher quality voices, go to Settings > Accessibility > Spoken Content > Voices and download Enhanced or Premium voices.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            ForEach(voiceGroups) { group in
+                Section(header: Text(group.languageName)) {
+                    ForEach(group.voices, id: \.identifier) { voice in
+                        VoiceRow(
+                            voice: voice,
+                            isSelected: voice.identifier == viewModel.selectedVoiceIdentifier,
+                            action: {
+                                viewModel.selectedVoiceIdentifier = voice.identifier
+                                // Play a preview
+                                playVoicePreview(voice: voice)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        .navigationTitle("Select Voice")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var hasOnlyStandardVoices: Bool {
+        voiceGroups.flatMap { $0.voices }.allSatisfy { $0.quality == .default }
+    }
+
+    private func playVoicePreview(voice: AVSpeechSynthesisVoice) {
+        let utterance = AVSpeechUtterance(string: "Hello, I'm \(voice.name)")
+        utterance.voice = voice
+        utterance.rate = 0.5
+
+        let synthesizer = AVSpeechSynthesizer()
+        synthesizer.speak(utterance)
+    }
+}
+
+// MARK: - Voice Row
+
+struct VoiceRow: View {
+    let voice: AVSpeechSynthesisVoice
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(voice.name)
+                        .font(.body)
+                        .foregroundColor(.primary)
+
+                    HStack(spacing: 8) {
+                        // Quality indicator
+                        QualityBadge(quality: voice.quality)
+
+                        // Gender indicator (if available)
+                        if voice.gender != .unspecified {
+                            Text(genderString(for: voice.gender))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.blue)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func genderString(for gender: AVSpeechSynthesisVoiceGender) -> String {
+        switch gender {
+        case .male: return "Male"
+        case .female: return "Female"
+        default: return ""
+        }
+    }
+}
+
+// MARK: - Quality Badge
+
+struct QualityBadge: View {
+    let quality: AVSpeechSynthesisVoiceQuality
+
+    var body: some View {
+        Text(qualityText)
+            .font(.caption2)
+            .fontWeight(.medium)
+            .foregroundColor(qualityColor)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(qualityColor.opacity(0.1))
+            .cornerRadius(4)
+    }
+
+    private var qualityText: String {
+        switch quality {
+        case .default: return "Standard"
+        case .enhanced: return "Enhanced"
+        case .premium: return "Premium"
+        @unknown default: return "Unknown"
+        }
+    }
+
+    private var qualityColor: Color {
+        switch quality {
+        case .default: return .gray
+        case .enhanced: return .blue
+        case .premium: return .purple
+        @unknown default: return .gray
         }
     }
 }
