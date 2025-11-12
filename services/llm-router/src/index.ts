@@ -2,7 +2,7 @@ import express from 'express';
 import { getPool, connectWithRetry, closePool } from './db/pool';
 import { ProviderManager } from './ProviderManager';
 import { RAGClient } from './rag-client';
-import { classifyIntent, buildSystemPrompt, injectCitations, validateGrounding } from './intent';
+import { buildSystemPrompt, injectCitations, validateGrounding } from './intent';
 import { CompletionRequest, IntentType } from './types';
 
 const app = express();
@@ -77,9 +77,9 @@ app.post('/complete', async (req, res) => {
     // Get the user's query (last message)
     const userQuery = messages[messages.length - 1]?.content || '';
 
-    // Classify intent
-    const intent = userIntent || classifyIntent(userQuery);
-    console.log(`[llm-router] Intent classified as: ${intent}`);
+    // Use provided intent or default to conversational (caller should classify)
+    let intent = userIntent || IntentType.CASUAL;
+    console.log(`[llm-router] Intent: ${intent} (${userIntent ? 'provided' : 'defaulted'})`);
 
     let context;
 
@@ -88,6 +88,13 @@ app.post('/complete', async (req, res) => {
       console.log('[llm-router] Retrieving context from RAG service...');
       context = await ragClient.retrieve(userQuery, 5);
       console.log(`[llm-router] Retrieved ${context.documents.length} documents`);
+
+      // Fallback: If no documents found, switch to conversational mode
+      if (!context.documents || context.documents.length === 0) {
+        console.log('[llm-router] No RAG documents found, falling back to conversational mode');
+        intent = IntentType.CASUAL;
+        context = undefined;
+      }
     }
 
     // Build system prompt based on intent and context
@@ -164,9 +171,9 @@ app.post('/complete/stream', async (req, res) => {
     // Get the user's query
     const userQuery = messages[messages.length - 1]?.content || '';
 
-    // Classify intent
-    const intent = userIntent || classifyIntent(userQuery);
-    console.log(`[llm-router] Stream intent: ${intent}`);
+    // Use provided intent or default to conversational (caller should classify)
+    let intent = userIntent || IntentType.CASUAL;
+    console.log(`[llm-router] Stream intent: ${intent} (${userIntent ? 'provided' : 'defaulted'})`);
 
     let context: any = undefined;
 
@@ -175,6 +182,13 @@ app.post('/complete/stream', async (req, res) => {
       console.log('[llm-router] Retrieving context for stream...');
       context = await ragClient.retrieve(userQuery, 5);
       console.log(`[llm-router] Retrieved ${context.documents.length} documents`);
+
+      // Fallback: If no documents found, switch to conversational mode
+      if (!context.documents || context.documents.length === 0) {
+        console.log('[llm-router] No RAG documents found, falling back to conversational mode');
+        intent = IntentType.CASUAL;
+        context = undefined;
+      }
     }
 
     // Build system prompt
@@ -265,20 +279,12 @@ app.get('/providers/health', (req, res) => {
   });
 });
 
-// Intent classification test endpoint
+// Intent classification test endpoint (deprecated - use ingress-service LLM classification)
 app.post('/classify', (req, res) => {
-  const { query } = req.body;
-
-  if (!query) {
-    return res.status(400).json({ error: 'Query is required' });
-  }
-
-  const intent = classifyIntent(query);
-
-  res.json({
-    query,
-    intent,
-    timestamp: new Date().toISOString(),
+  res.status(410).json({
+    error: 'This endpoint is deprecated',
+    message: 'Intent classification should be done by the ingress-service using LLM-based classification',
+    suggestion: 'Call POST /api/chat/message instead',
   });
 });
 

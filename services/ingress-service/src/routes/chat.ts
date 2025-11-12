@@ -10,68 +10,11 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger';
 import { getPool } from '../db/pool';
+import { classifyIntentWithLLM } from '../utils/intentClassifier';
 
 const router = express.Router();
 
 const LLM_ROUTER_URL = process.env.LLM_ROUTER_URL || 'http://llm-router:3003';
-
-// Intent classification logic (matching llm-router)
-const CRITICAL_KEYWORDS = [
-  'how',
-  'what',
-  'explain',
-  'describe',
-  'tell me about',
-  'information about',
-  'details about',
-  'show me',
-  'find',
-  'search',
-  'lookup',
-  'documentation',
-  'docs',
-  'api',
-  'function',
-  'method',
-  'class',
-  'code',
-  'implementation',
-  'example',
-  'tutorial',
-  'guide',
-];
-
-function classifyIntent(query: string): 'critical' | 'conversational' {
-  const lowerQuery = query.toLowerCase();
-
-  // Check for critical keywords
-  for (const keyword of CRITICAL_KEYWORDS) {
-    if (lowerQuery.includes(keyword)) {
-      return 'critical';
-    }
-  }
-
-  // Check for question patterns
-  const questionPatterns = [/^(what|how|why|when|where|who|which)\s/i, /\?$/];
-
-  for (const pattern of questionPatterns) {
-    if (pattern.test(query)) {
-      return 'critical';
-    }
-  }
-
-  // Check for casual greetings
-  const casualPatterns = [/^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure)\s*[!.]?$/i];
-
-  for (const pattern of casualPatterns) {
-    if (pattern.test(query.trim())) {
-      return 'conversational';
-    }
-  }
-
-  // Default to critical to ensure RAG is used when uncertain
-  return 'critical';
-}
 
 /**
  * Send a text message and get LLM response
@@ -117,8 +60,8 @@ router.post('/message', async (req: Request, res: Response) => {
       content: message,
     });
 
-    // Classify intent automatically (unless explicitly provided)
-    const intent = userProvidedIntent || classifyIntent(message);
+    // Classify intent using LLM (unless explicitly provided)
+    const intent = userProvidedIntent || (await classifyIntentWithLLM(message));
 
     // Call LLM router with proper intent classification
     logger.info({ userId, messageId, conversationId, intent, message: message.substring(0, 100) }, 'Sending message to LLM with RAG');

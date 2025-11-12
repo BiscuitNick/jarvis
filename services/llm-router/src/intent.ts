@@ -1,73 +1,9 @@
 /**
- * Intent classification and prompt engineering
+ * Intent-based prompt engineering for RAG integration
+ * Note: Intent classification is now handled by the ingress-service using LLM-based classification
  */
 
 import { IntentType, Message, RetrievalContext } from './types';
-
-/**
- * Critical intent keywords that require retrieval-only responses
- */
-const CRITICAL_KEYWORDS = [
-  'how',
-  'what',
-  'explain',
-  'describe',
-  'tell me about',
-  'information about',
-  'details about',
-  'show me',
-  'find',
-  'search',
-  'lookup',
-  'documentation',
-  'docs',
-  'api',
-  'function',
-  'method',
-  'class',
-  'code',
-  'implementation',
-  'example',
-  'tutorial',
-  'guide',
-];
-
-/**
- * Classify the intent of a user query
- */
-export function classifyIntent(query: string): IntentType {
-  const lowerQuery = query.toLowerCase();
-
-  // Check for critical keywords
-  for (const keyword of CRITICAL_KEYWORDS) {
-    if (lowerQuery.includes(keyword)) {
-      return IntentType.CRITICAL;
-    }
-  }
-
-  // Check for question patterns
-  const questionPatterns = [/^(what|how|why|when|where|who|which)\s/i, /\?$/];
-
-  for (const pattern of questionPatterns) {
-    if (pattern.test(query)) {
-      return IntentType.CRITICAL;
-    }
-  }
-
-  // Default to casual for greetings and simple interactions
-  const casualPatterns = [
-    /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure)\s*[!.]?$/i,
-  ];
-
-  for (const pattern of casualPatterns) {
-    if (pattern.test(query.trim())) {
-      return IntentType.CASUAL;
-    }
-  }
-
-  // Default to critical to be safe
-  return IntentType.CRITICAL;
-}
 
 /**
  * Build system prompt based on intent type
