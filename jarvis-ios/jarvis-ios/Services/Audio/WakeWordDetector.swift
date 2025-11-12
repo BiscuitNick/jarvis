@@ -20,10 +20,12 @@ class WakeWordDetector: ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
+    private var sessionStartTime: Date?
+    private var restartTimer: Timer?
 
     // Configuration
-    private let wakeWord = "jarvis"
-    private let confidenceThreshold: Float = 0.5
+    private let wakeWords = ["jarvis", "travis", "service", "nervous", "harvest"] // Common misheard variations
+    private let confidenceThreshold: Float = 0.3 // Lowered threshold since wake word is uncommon
     private let bufferSize: AVAudioFrameCount = 1024
 
     init() {
@@ -40,6 +42,12 @@ class WakeWordDetector: ObservableObject {
     }
 
     func startListening() throws {
+        print("🎤 WakeWordDetector: Starting wake word detection for 'jarvis' (and variations: \(wakeWords.joined(separator: ", ")))")
+
+        // Reset the wake word detected flag when starting a new session
+        wakeWordDetected = false
+        print("🔄 WakeWordDetector: Reset wakeWordDetected flag to false")
+
         // Cancel any existing task
         if recognitionTask != nil {
             recognitionTask?.cancel()
@@ -57,6 +65,8 @@ class WakeWordDetector: ObservableObject {
         try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
         try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
+        print("🎤 WakeWordDetector: Audio session configured")
+
         // Create recognition request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest = recognitionRequest else {
@@ -71,6 +81,10 @@ class WakeWordDetector: ObservableObject {
         // Start recognition task
         recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             guard let self = self else { return }
+
+            if let error = error {
+                print("❌ WakeWordDetector: Recognition error: \(error.localizedDescription)")
+            }
 
             if let result = result {
                 Task { @MainActor in
@@ -89,6 +103,17 @@ class WakeWordDetector: ObservableObject {
 
                 self.recognitionRequest = nil
                 self.recognitionTask = nil
+
+                // If there was an error and we're still supposed to be listening, restart
+                if error != nil && self.isListening {
+                    print("⚠️ WakeWordDetector: Restarting after error...")
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                        if self.isListening {
+                            try? self.startListening()
+                        }
+                    }
+                }
             }
         }
 
@@ -105,9 +130,30 @@ class WakeWordDetector: ObservableObject {
         try audioEngine.start()
 
         isListening = true
+        sessionStartTime = Date()
+
+        // Schedule restart before 1-minute timeout (restart at 55 seconds)
+        restartTimer?.invalidate()
+        restartTimer = Timer.scheduledTimer(withTimeInterval: 55, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self, self.isListening else { return }
+                print("⏰ WakeWordDetector: Approaching 1-minute limit, restarting...")
+                self.stopListening()
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second delay
+                if self.isListening { // Check if we should still be listening
+                    try? self.startListening()
+                }
+            }
+        }
+
+        print("🎤 WakeWordDetector: Audio engine started, listening for wake word... (will restart in 55s)")
     }
 
     func stopListening() {
+        // Cancel restart timer
+        restartTimer?.invalidate()
+        restartTimer = nil
+
         // End audio for the recognition request first
         recognitionRequest?.endAudio()
 
@@ -127,34 +173,54 @@ class WakeWordDetector: ObservableObject {
         recognitionRequest = nil
 
         isListening = false
+
+        // Reset wake word detection flag to allow re-detection
+        wakeWordDetected = false
+
+        print("🛑 WakeWordDetector: Stopped listening")
     }
 
     private func processRecognitionResult(_ result: SFSpeechRecognitionResult) {
         let transcript = result.bestTranscription.formattedString.lowercased()
         lastTranscript = transcript
 
-        // Check if wake word is detected
-        if transcript.contains(wakeWord) {
-            // Check confidence level
-            let confidence = calculateConfidence(for: result)
+        // Calculate average confidence for all words
+        let overallConfidence = result.bestTranscription.segments.isEmpty ? 0.0 :
+            result.bestTranscription.segments.reduce(0.0) { $0 + $1.confidence } / Float(result.bestTranscription.segments.count)
+
+        print("🎤 WakeWordDetector: Heard: '\(transcript)' (confidence: \(String(format: "%.2f", overallConfidence)))")
+
+        // Check if any wake word variation is detected
+        let detectedWakeWord = wakeWords.first { word in
+            transcript.contains(word)
+        }
+
+        if let detected = detectedWakeWord {
+            print("🎯 WakeWordDetector: Wake word variation '\(detected)' found in transcript!")
+
+            // Check confidence level for the specific wake word
+            let confidence = calculateConfidenceForWord(word: detected, in: result)
+            print("🎯 WakeWordDetector: Confidence for '\(detected)': \(String(format: "%.2f", confidence)) (threshold: \(confidenceThreshold))")
 
             if confidence >= confidenceThreshold {
                 wakeWordDetected = true
-                print("Wake word detected with confidence: \(confidence)")
+                print("✅ WakeWordDetector: Wake word detected with sufficient confidence: \(confidence)")
 
                 // Notify and potentially stop listening or transition to full recognition
                 handleWakeWordDetection()
+            } else {
+                print("⚠️ WakeWordDetector: Wake word detected but confidence too low: \(confidence)")
             }
         }
     }
 
-    private func calculateConfidence(for result: SFSpeechRecognitionResult) -> Float {
-        // Average confidence across all segments containing the wake word
+    private func calculateConfidenceForWord(word: String, in result: SFSpeechRecognitionResult) -> Float {
+        // Get confidence for segments containing the specific word
         let segments = result.bestTranscription.segments
         var confidenceSum: Float = 0.0
         var count = 0
 
-        for segment in segments where segment.substring.lowercased().contains(wakeWord) {
+        for segment in segments where segment.substring.lowercased().contains(word) {
             confidenceSum += segment.confidence
             count += 1
         }
@@ -162,14 +228,11 @@ class WakeWordDetector: ObservableObject {
         return count > 0 ? confidenceSum / Float(count) : 0.0
     }
 
+
     private func handleWakeWordDetection() {
-        // Reset the flag after a short delay to allow for re-detection
-        Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            await MainActor.run {
-                self.wakeWordDetected = false
-            }
-        }
+        // The flag will be reset when stopListening() is called
+        // This prevents double triggers and ensures clean state management
+        print("🔔 WakeWordDetector: Wake word handler called - flag will reset on stop")
     }
 
     enum WakeWordError: Error {

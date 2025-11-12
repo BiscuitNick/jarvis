@@ -23,7 +23,7 @@ class AudioManager: ObservableObject {
 
     private var audioEngine: AVAudioEngine?
     private var inputNode: AVAudioInputNode?
-    private let wakeWordDetector: WakeWordDetector
+    let wakeWordDetector: WakeWordDetector // Made accessible for ViewModel bindings
     private let voiceActivityDetector: VoiceActivityDetector
     private var cancellables = Set<AnyCancellable>()
 

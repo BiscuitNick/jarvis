@@ -140,6 +140,33 @@ class VoiceAssistantViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Observe wake word detection from AudioManager's WakeWordDetector
+        audioManager.wakeWordDetector.$wakeWordDetected
+            .removeDuplicates() // Only trigger on changes
+            .sink { [weak self] detected in
+                guard let self = self else { return }
+                self.wakeWordDetected = detected
+
+                // Automatically start listening when wake word is detected (goes from false to true)
+                if detected && self.wakeWordEnabled && !self.isListening {
+                    print("🎯 VoiceAssistantViewModel: Wake word detected! Pausing wake word detector and starting listening...")
+
+                    // Temporarily stop wake word detection to avoid audio engine conflict
+                    // But DON'T set wakeWordEnabled to false - that's the user preference!
+                    self.audioManager.wakeWordDetector.stopListening()
+
+                    // Start listening after a small delay to ensure audio engine is released
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                        print("🎯 VoiceAssistantViewModel: Starting speech recognition...")
+                        self.startListening()
+                    }
+                } else if detected && self.isListening {
+                    print("ℹ️ VoiceAssistantViewModel: Wake word detected but already listening")
+                }
+            }
+            .store(in: &cancellables)
+
         audioManager.$vadEnabled
             .sink { [weak self] enabled in
                 self?.vadEnabled = enabled
@@ -221,16 +248,20 @@ class VoiceAssistantViewModel: ObservableObject {
                 if isFinal {
                     print("📝 Final transcript (callback): \(transcript)")
 
-                    // Add to messages only if not already added
-                    if !self.currentTranscriptAdded {
+                    // Only process if we have actual content and it hasn't been added yet
+                    if !transcript.isEmpty && !self.currentTranscriptAdded {
                         self.addUserMessage(transcript)
                         self.currentTranscriptAdded = true
-                    }
 
-                    // Send to backend based on mode
-                    if self.recognitionMode != .professionalMode {
-                        // For native speech modes, send text via gRPC
-                        await self.sendTranscriptToBackend(transcript)
+                        // Send to backend based on mode
+                        if self.recognitionMode != .professionalMode {
+                            // For native speech modes, send text via gRPC
+                            await self.sendTranscriptToBackend(transcript)
+                        }
+                    } else if transcript.isEmpty {
+                        print("ℹ️ Ignoring empty final transcript")
+                    } else if self.currentTranscriptAdded {
+                        print("ℹ️ Transcript already processed, ignoring duplicate final")
                     }
                 }
             }
@@ -343,14 +374,17 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     func startWakeWordDetection() async {
+        print("📢 VoiceAssistantViewModel: Starting wake word detection (user enabled)")
         do {
             try await audioManager.startWakeWordDetection()
+            print("✅ VoiceAssistantViewModel: Wake word detection started")
         } catch {
-            print("Failed to start wake word detection: \(error)")
+            print("❌ Failed to start wake word detection: \(error)")
         }
     }
 
     func stopWakeWordDetection() {
+        print("📢 VoiceAssistantViewModel: Stopping wake word detection (user disabled)")
         audioManager.stopWakeWordDetection()
     }
 
@@ -457,6 +491,30 @@ class VoiceAssistantViewModel: ObservableObject {
             // Stop WebRTC streaming
             audioManager.stopRecording()
             stopAudioStreaming()
+        }
+
+        // Restart wake word detection if the user has it enabled in settings
+        // wakeWordEnabled represents the user's preference - if true, keep it running
+        if wakeWordEnabled {
+            print("🔄 VoiceAssistantViewModel: User has wake word enabled, restarting detection...")
+            Task {
+                // Small delay to ensure audio resources are released
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+                // Only restart if it's not already listening (avoid duplicate starts)
+                if !audioManager.wakeWordDetector.isListening {
+                    do {
+                        try await audioManager.startWakeWordDetection()
+                        print("✅ VoiceAssistantViewModel: Wake word detection restarted successfully")
+                    } catch {
+                        print("❌ VoiceAssistantViewModel: Failed to restart wake word detection: \(error)")
+                    }
+                } else {
+                    print("ℹ️ VoiceAssistantViewModel: Wake word detection already running")
+                }
+            }
+        } else {
+            print("ℹ️ VoiceAssistantViewModel: Wake word not enabled by user, not restarting")
         }
     }
 
