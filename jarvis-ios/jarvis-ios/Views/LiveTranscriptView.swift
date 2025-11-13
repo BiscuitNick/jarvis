@@ -50,7 +50,6 @@ struct LiveTranscriptView: View {
                             Image(systemName: "pause.circle.fill")
                                 .foregroundColor(.orange)
                                 .font(.caption)
-                                .transition(.scale)
 
                             Text("Detecting silence...")
                                 .font(.caption2)
@@ -65,6 +64,7 @@ struct LiveTranscriptView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    .animation(.easeInOut, value: silenceDetectionActive)
                 }
 
                 Spacer()
