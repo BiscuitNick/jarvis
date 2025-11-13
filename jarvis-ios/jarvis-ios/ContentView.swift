@@ -56,7 +56,9 @@ struct ContentView: View {
                     // Transcript Area
                     TranscriptView(
                         messages: viewModel.messages,
-                        isStreaming: viewModel.isStreaming
+                        isStreaming: viewModel.isStreaming,
+                        liveTranscript: viewModel.isListening ? viewModel.transcript : nil,
+                        isListening: viewModel.isListening
                     )
                     .background(Color.white.opacity(0.05))
                     .cornerRadius(16)
@@ -64,6 +66,15 @@ struct ContentView: View {
                     .padding(.bottom, 12)
 
                     Spacer()
+
+                    // Live Transcript Display
+                    LiveTranscriptView(
+                        transcript: viewModel.transcript,
+                        isListening: viewModel.isListening
+                    )
+                    .padding(.horizontal)
+                    .padding(.bottom, 16)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.transcript)
 
                     // Microphone Button
                     LabeledMicrophoneButton(

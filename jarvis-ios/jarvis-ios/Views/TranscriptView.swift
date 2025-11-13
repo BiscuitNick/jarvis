@@ -46,6 +46,8 @@ struct Citation: Identifiable {
 struct TranscriptView: View {
     let messages: [TranscriptMessage]
     let isStreaming: Bool
+    var liveTranscript: String? = nil  // Optional live transcript to show
+    var isListening: Bool = false      // Whether actively listening
 
     @State private var scrollProxy: ScrollViewProxy?
 
@@ -59,6 +61,16 @@ struct TranscriptView: View {
                         ForEach(messages) { message in
                             TranscriptMessageView(message: message)
                                 .id(message.id)
+                        }
+
+                        // Show live transcript as a temporary message while listening
+                        if isListening, let liveTranscript = liveTranscript, !liveTranscript.isEmpty {
+                            LiveTranscriptMessageView(transcript: liveTranscript)
+                                .id("liveTranscript")
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                                    removal: .scale(scale: 0.95).combined(with: .opacity)
+                                ))
                         }
 
                         if isStreaming {
@@ -267,6 +279,90 @@ struct EmptyTranscriptView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+    }
+}
+
+// MARK: - Live Transcript Message
+
+struct LiveTranscriptMessageView: View {
+    let transcript: String
+    @State private var dotCount = 0
+
+    var body: some View {
+        HStack(alignment: .top) {
+            // User icon with animation
+            Image(systemName: "person.fill")
+                .foregroundColor(.blue)
+                .font(.system(size: 14))
+                .frame(width: 20)
+                .overlay(
+                    Circle()
+                        .stroke(Color.blue.opacity(0.5), lineWidth: 1)
+                        .scaleEffect(1.5)
+                        .opacity(0.5)
+                        .animation(
+                            Animation.easeInOut(duration: 1.5)
+                                .repeatForever(autoreverses: false),
+                            value: dotCount
+                        )
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                // Live transcript text with typing indicator
+                HStack(alignment: .bottom, spacing: 4) {
+                    Text(transcript)
+                        .font(.body)
+                        .foregroundColor(.primary.opacity(0.85))
+                        .italic()
+
+                    // Animated dots
+                    HStack(spacing: 2) {
+                        ForEach(0..<3) { index in
+                            Circle()
+                                .fill(Color.blue.opacity(index <= dotCount ? 1.0 : 0.3))
+                                .frame(width: 3, height: 3)
+                        }
+                    }
+                    .padding(.bottom, 4)
+                }
+
+                // Live indicator
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 5, height: 5)
+
+                    Text("Speaking...")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            Color.blue.opacity(0.05)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(
+                            style: StrokeStyle(lineWidth: 1, dash: [5, 3])
+                        )
+                        .foregroundColor(.blue.opacity(0.3))
+                )
+        )
+        .cornerRadius(12)
+        .onAppear {
+            startAnimation()
+        }
+    }
+
+    private func startAnimation() {
+        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
+            withAnimation {
+                dotCount = (dotCount + 1) % 4
+            }
+        }
     }
 }
 
