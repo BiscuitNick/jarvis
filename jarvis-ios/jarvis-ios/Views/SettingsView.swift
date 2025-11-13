@@ -110,6 +110,52 @@ struct SettingsView: View {
                     }
                 }
 
+                // Silence Detection Section
+                Section {
+                    Toggle("Auto-stop on Silence", isOn: Binding(
+                        get: {
+                            UserDefaults.standard.object(forKey: "silenceDetectionEnabled") as? Bool ?? true
+                        },
+                        set: { newValue in
+                            UserDefaults.standard.set(newValue, forKey: "silenceDetectionEnabled")
+                        }
+                    ))
+
+                    if UserDefaults.standard.object(forKey: "silenceDetectionEnabled") as? Bool ?? true {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Silence Duration")
+                                Spacer()
+                                Text(String(format: "%.1f seconds",
+                                           UserDefaults.standard.double(forKey: "silenceDetectionDuration") > 0
+                                           ? UserDefaults.standard.double(forKey: "silenceDetectionDuration")
+                                           : 2.0))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Slider(
+                                value: Binding(
+                                    get: {
+                                        let value = UserDefaults.standard.double(forKey: "silenceDetectionDuration")
+                                        return value > 0 ? value : 2.0
+                                    },
+                                    set: { newValue in
+                                        UserDefaults.standard.set(newValue, forKey: "silenceDetectionDuration")
+                                    }
+                                ),
+                                in: 0.5...5.0,
+                                step: 0.5
+                            )
+                            .accentColor(.blue)
+                        }
+                    }
+                } header: {
+                    Text("Recording Control")
+                } footer: {
+                    Text("Automatically stop recording and send message after detecting silence. Adjust the duration to match your speaking style.")
+                        .font(.caption)
+                }
+
                 // Session Information
                 if let sessionId = viewModel.currentSessionId {
                     Section("Session") {

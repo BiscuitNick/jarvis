@@ -70,7 +70,8 @@ struct ContentView: View {
                     // Live Transcript Display
                     LiveTranscriptView(
                         transcript: viewModel.transcript,
-                        isListening: viewModel.isListening
+                        isListening: viewModel.isListening,
+                        silenceDetectionActive: viewModel.silenceDetectionActive
                     )
                     .padding(.horizontal)
                     .padding(.bottom, 16)

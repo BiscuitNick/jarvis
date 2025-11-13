@@ -67,6 +67,7 @@ class VoiceAssistantViewModel: ObservableObject {
     }
     @Published var isRecognizing = false
     @Published var recognitionError: String?
+    @Published var silenceDetectionActive = false
 
     // Text-to-Speech
     @Published var selectedVoiceIdentifier: String {
@@ -153,6 +154,12 @@ class VoiceAssistantViewModel: ObservableObject {
                 if detected && self.wakeWordEnabled && !self.isListening {
                     print("🎯 VoiceAssistantViewModel: Wake word detected! Pausing wake word detector and starting listening...")
 
+                    // Stop TTS immediately if it's speaking (wake word interruption)
+                    if self.speechSynthesizer.isSpeaking {
+                        print("🔇 Stopping TTS playback - wake word interrupted")
+                        self.speechSynthesizer.stopSpeaking(at: .immediate)
+                    }
+
                     // Temporarily stop wake word detection to avoid audio engine conflict
                     // But DON'T set wakeWordEnabled to false - that's the user preference!
                     self.audioManager.wakeWordDetector.stopListening()
@@ -237,6 +244,13 @@ class VoiceAssistantViewModel: ObservableObject {
                 self?.recognitionError = error
             }
             .store(in: &cancellables)
+
+        // Observe silence detection state
+        speechRecognitionManager.$silenceDetectionActive
+            .sink { [weak self] isActive in
+                self?.silenceDetectionActive = isActive
+            }
+            .store(in: &cancellables)
     }
 
     private func setupSpeechRecognition() {
@@ -264,6 +278,27 @@ class VoiceAssistantViewModel: ObservableObject {
                         print("ℹ️ Ignoring empty final transcript")
                     } else if self.currentTranscriptAdded {
                         print("ℹ️ Transcript already processed, ignoring duplicate final")
+                    }
+                }
+            }
+        }
+
+        // Set up callback for silence detection auto-stop
+        speechRecognitionManager.onSilenceDetected = { [weak self] in
+            Task { @MainActor in
+                guard let self = self else { return }
+
+                print("🔕 Auto-stopping due to silence detection")
+
+                // The speech recognition manager already finalized the transcript
+                // Just stop listening and restart wake word if needed
+                self.isListening = false
+
+                // Restart wake word detection if it was enabled
+                if self.wakeWordEnabled {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                        self.startWakeWordDetection()
                     }
                 }
             }
@@ -516,6 +551,12 @@ class VoiceAssistantViewModel: ObservableObject {
         print("🎙️ Starting listening session")
         print("   Current transcript before clear: '\(transcript)'")
         print("   Current flag state: \(currentTranscriptAdded)")
+
+        // Stop TTS immediately if it's speaking (user wants to interrupt)
+        if speechSynthesizer.isSpeaking {
+            print("🔇 Stopping TTS playback - user interrupted")
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
 
         // Clear previous transcript to start fresh
         transcript = ""

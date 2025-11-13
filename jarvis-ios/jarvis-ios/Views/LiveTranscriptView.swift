@@ -10,6 +10,7 @@ import SwiftUI
 struct LiveTranscriptView: View {
     let transcript: String
     let isListening: Bool
+    var silenceDetectionActive: Bool = false
 
     @State private var pulseOpacity: Double = 0.7
 
@@ -44,13 +45,25 @@ struct LiveTranscriptView: View {
 
                     // Visual indicator that this is live
                     HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 6, height: 6)
+                        if silenceDetectionActive {
+                            // Show pause indicator when detecting silence
+                            Image(systemName: "pause.circle.fill")
+                                .foregroundColor(.orange)
+                                .font(.caption)
+                                .transition(.scale)
 
-                        Text("Live transcription")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                            Text("Detecting silence...")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                        } else {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+
+                            Text("Live transcription")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
 

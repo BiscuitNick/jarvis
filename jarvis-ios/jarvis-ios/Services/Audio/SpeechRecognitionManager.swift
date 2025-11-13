@@ -17,6 +17,7 @@ class SpeechRecognitionManager: ObservableObject {
     @Published var currentTranscript = ""
     @Published var finalTranscript = ""
     @Published var recognitionError: String?
+    @Published var silenceDetectionActive = false  // Track if silence timer is running
 
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -28,8 +29,23 @@ class SpeechRecognitionManager: ObservableObject {
     private let bufferSize: AVAudioFrameCount = 1024
     private var isManualStop = false // Track if stop was initiated by user
 
+    // Silence detection
+    private var silenceTimer: Timer?
+    private var lastTranscriptTime: Date = Date()
+    private var silenceDurationThreshold: TimeInterval {
+        // Get from UserDefaults, default to 2.0 seconds
+        UserDefaults.standard.double(forKey: "silenceDetectionDuration") > 0
+            ? UserDefaults.standard.double(forKey: "silenceDetectionDuration")
+            : 2.0
+    }
+    private var isSilenceDetectionEnabled: Bool {
+        // Get from UserDefaults, default to true
+        UserDefaults.standard.object(forKey: "silenceDetectionEnabled") as? Bool ?? true
+    }
+
     // Callback for sending transcripts to backend
     var onTranscript: ((String, Bool) -> Void)?
+    var onSilenceDetected: (() -> Void)?  // Callback when silence triggers auto-stop
 
     init(locale: Locale = Locale(identifier: "en-US")) {
         speechRecognizer = SFSpeechRecognizer(locale: locale)
@@ -115,12 +131,24 @@ class SpeechRecognitionManager: ObservableObject {
                     self.currentTranscript = result.bestTranscription.formattedString
                     print("📢 Speech result: '\(self.currentTranscript)' (isFinal: \(result.isFinal))")
 
+                    // Update last transcript time and manage silence detection
+                    if !self.currentTranscript.isEmpty {
+                        self.lastTranscriptTime = Date()
+                        self.resetSilenceTimer()
+
+                        // Start silence detection if enabled and we have content
+                        if self.isSilenceDetectionEnabled && !result.isFinal {
+                            self.startSilenceTimer()
+                        }
+                    }
+
                     // Send partial transcript to backend
                     self.onTranscript?(self.currentTranscript, result.isFinal)
 
                     if result.isFinal {
                         self.finalTranscript = self.currentTranscript
                         print("✅ Final transcript: \(self.currentTranscript)")
+                        self.stopSilenceTimer()
                     }
                 }
 
@@ -189,6 +217,9 @@ class SpeechRecognitionManager: ObservableObject {
         // Mark as manual stop to prevent auto-restart
         isManualStop = true
 
+        // Stop silence detection timer
+        stopSilenceTimer()
+
         // End audio for the recognition request first
         recognitionRequest?.endAudio()
 
@@ -231,6 +262,57 @@ class SpeechRecognitionManager: ObservableObject {
     func setRecognitionMode(onDevice: Bool) {
         useOnDeviceRecognition = onDevice
         print("🔄 Recognition mode: \(onDevice ? "on-device" : "cloud")")
+    }
+
+    // MARK: - Silence Detection
+
+    private func startSilenceTimer() {
+        // Don't start a new timer if one is already running
+        guard silenceTimer == nil else { return }
+
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: silenceDurationThreshold, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+
+            Task { @MainActor in
+                self.handleSilenceDetected()
+            }
+        }
+
+        silenceDetectionActive = true
+        print("⏱️ Silence timer started (\(silenceDurationThreshold)s threshold)")
+    }
+
+    private func resetSilenceTimer() {
+        stopSilenceTimer()
+    }
+
+    private func stopSilenceTimer() {
+        silenceTimer?.invalidate()
+        silenceTimer = nil
+        silenceDetectionActive = false
+    }
+
+    private func handleSilenceDetected() {
+        print("🔕 Silence detected after \(silenceDurationThreshold) seconds")
+
+        // Only trigger if we have transcript content
+        guard !currentTranscript.isEmpty else {
+            print("⚠️ No transcript to send on silence")
+            return
+        }
+
+        // Mark as manual stop to prevent auto-restart
+        isManualStop = true
+
+        // Notify about silence-triggered stop
+        onSilenceDetected?()
+
+        // Finalize the transcript
+        finalTranscript = currentTranscript
+        onTranscript?(currentTranscript, true)
+
+        // Stop recognition
+        stopRecognition()
     }
 
     enum SpeechRecognitionError: Error {
