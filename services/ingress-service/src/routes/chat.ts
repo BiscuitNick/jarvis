@@ -22,9 +22,16 @@ const LLM_ROUTER_URL = process.env.LLM_ROUTER_URL || 'http://llm-router:3003';
  */
 router.post('/message', async (req: Request, res: Response) => {
   try {
-    const { message, conversationId, intent: userProvidedIntent } = req.body;
+    const { message, conversationId, intent: userProvidedIntent, history: clientHistory } = req.body;
     // AUTH DISABLED - Using dummy userId for testing (valid UUID format)
     const userId = '00000000-0000-0000-0000-000000000001'; // (req as any).userId; // Set by auth middleware
+
+    // DEBUG: Log entire request body
+    logger.info({
+      requestBody: req.body,
+      hasHistory: !!clientHistory,
+      historyLength: Array.isArray(clientHistory) ? clientHistory.length : 0
+    }, 'DEBUG: Request body received');
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -34,11 +41,23 @@ router.post('/message', async (req: Request, res: Response) => {
     const messageId = uuidv4();
     const timestamp = new Date().toISOString();
 
-    // Build conversation history if conversationId provided
+    // Build conversation history
     let messages: Array<{ role: string; content: string }> = [];
 
-    if (conversationId) {
-      // Fetch conversation history from database
+    // Priority 1: Use history from iOS app if provided (local conversation management)
+    if (clientHistory && Array.isArray(clientHistory)) {
+      messages = clientHistory.map((msg: any) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+      logger.info({ messageCount: messages.length }, 'Using client-provided conversation history');
+      // Debug log the actual messages
+      messages.forEach((msg, index) => {
+        logger.info({ index, role: msg.role, contentPreview: msg.content.substring(0, 50) }, 'History message');
+      });
+    }
+    // Priority 2: Fallback to database lookup if conversationId provided (backward compatibility)
+    else if (conversationId) {
       const pool = getPool();
       const historyResult = await pool.query(
         `SELECT role, content FROM conversation_messages
@@ -52,6 +71,7 @@ router.post('/message', async (req: Request, res: Response) => {
         role: row.role,
         content: row.content,
       }));
+      logger.info({ messageCount: messages.length }, 'Using database conversation history');
     }
 
     // Add current user message
@@ -64,7 +84,17 @@ router.post('/message', async (req: Request, res: Response) => {
     const intent = userProvidedIntent || (await classifyIntentWithLLM(message));
 
     // Call LLM router with proper intent classification
-    logger.info({ userId, messageId, conversationId, intent, message: message.substring(0, 100) }, 'Sending message to LLM with RAG');
+    logger.info({
+      userId,
+      messageId,
+      conversationId,
+      intent,
+      message: message.substring(0, 100),
+      totalMessagesCount: messages.length
+    }, 'Sending message to LLM with RAG');
+
+    // Debug: Log all messages being sent to LLM
+    logger.info({ messagesBeingSent: messages.map(m => ({ role: m.role, preview: m.content.substring(0, 30) })) }, 'Full message array to LLM');
 
     const llmResponse = await axios.post(
       `${LLM_ROUTER_URL}/complete`,

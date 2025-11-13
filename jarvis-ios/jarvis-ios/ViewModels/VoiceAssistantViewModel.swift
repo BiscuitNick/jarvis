@@ -80,6 +80,7 @@ class VoiceAssistantViewModel: ObservableObject {
     let grpcClient: GRPCClient
     let authService: AuthenticationService
     let speechRecognitionManager: SpeechRecognitionManager
+    let conversationManager: ConversationManager
 
     private var cancellables = Set<AnyCancellable>()
     private var currentTranscriptAdded = false // Track if current transcript was added to messages
@@ -90,13 +91,15 @@ class VoiceAssistantViewModel: ObservableObject {
         webRTCClient: WebRTCClient,
         grpcClient: GRPCClient,
         authService: AuthenticationService,
-        speechRecognitionManager: SpeechRecognitionManager
+        speechRecognitionManager: SpeechRecognitionManager,
+        conversationManager: ConversationManager
     ) {
         self.audioManager = audioManager
         self.webRTCClient = webRTCClient
         self.grpcClient = grpcClient
         self.authService = authService
         self.speechRecognitionManager = speechRecognitionManager
+        self.conversationManager = conversationManager
 
         // Load saved recognition mode from UserDefaults
         if let savedMode = UserDefaults.standard.string(forKey: "recognitionMode"),
@@ -123,6 +126,7 @@ class VoiceAssistantViewModel: ObservableObject {
             }
         }
 
+        loadMessagesFromConversation()
         setupBindings()
         setupSpeechRecognition()
     }
@@ -300,13 +304,45 @@ class VoiceAssistantViewModel: ObservableObject {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+            // DEBUG: First check what's in the local messages array
+            print("🔍 Local messages array has \(messages.count) messages")
+            for (index, msg) in messages.enumerated() {
+                print("  Local Message \(index): [\(msg.role)] \(String(msg.text.prefix(50)))...")
+            }
+
+            // Get conversation history (last 25 messages for context)
+            let conversationHistory = getMessagesForLLM()
+
+            // Convert to format expected by backend
+            let historyMessages = conversationHistory.map { message -> [String: Any] in
+                let role: String
+                switch message.role {
+                case .user: role = "user"
+                case .assistant: role = "assistant"
+                case .system: role = "system"
+                }
+                return [
+                    "role": role,
+                    "content": message.text
+                ]
+            }
+
             let body: [String: Any] = [
-                "message": transcript
+                "message": transcript,
+                "history": historyMessages
                 // Let backend auto-classify intent to enable RAG for critical queries
             ]
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let jsonData = try JSONSerialization.data(withJSONObject: body)
+            request.httpBody = jsonData
+
+            // Debug: Print the actual JSON being sent
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print("📤 Full JSON Request Body:")
+                print(jsonString)
+            }
 
             print("🌐 Calling chat API at \(url.absoluteString)...")
+            print("📜 Including \(historyMessages.count) messages in conversation history")
             let session = AppEnvironment.makeURLSession()
             let (data, response) = try await session.data(for: request)
 
@@ -686,6 +722,9 @@ class VoiceAssistantViewModel: ObservableObject {
         )
         messages.append(message)
         transcript = text
+
+        // Save to conversation manager
+        conversationManager.addMessage(StoredMessage.from(message))
     }
 
     func addAssistantMessage(_ text: String, sources: [Citation]? = nil) {
@@ -697,6 +736,9 @@ class VoiceAssistantViewModel: ObservableObject {
         )
         messages.append(message)
         isStreaming = false
+
+        // Save to conversation manager
+        conversationManager.addMessage(StoredMessage.from(message))
     }
 
     func addSystemMessage(_ text: String) {
@@ -707,6 +749,9 @@ class VoiceAssistantViewModel: ObservableObject {
             sources: nil
         )
         messages.append(message)
+
+        // Save to conversation manager
+        conversationManager.addMessage(StoredMessage.from(message))
     }
 
     func startStreaming() {
@@ -717,6 +762,46 @@ class VoiceAssistantViewModel: ObservableObject {
         messages.removeAll()
         transcript = ""
         isStreaming = false
+        conversationManager.clearCurrentConversation()
+    }
+
+    // MARK: - Conversation Management
+
+    /// Load messages from the current conversation
+    private func loadMessagesFromConversation() {
+        guard let conversation = conversationManager.currentConversation else {
+            print("⚠️ No current conversation to load messages from")
+            return
+        }
+        messages = conversation.messages.map { $0.toTranscriptMessage() }
+        print("✅ Loaded \(messages.count) messages from conversation")
+    }
+
+    /// Create a new conversation
+    func createNewConversation() {
+        conversationManager.createNewConversation()
+        messages.removeAll()
+        transcript = ""
+        isStreaming = false
+    }
+
+    /// Load a previous conversation
+    func loadConversation(_ conversation: Conversation) {
+        conversationManager.loadConversation(conversation)
+        loadMessagesFromConversation()
+        transcript = ""
+        isStreaming = false
+    }
+
+    /// Get the last 25 messages to send to LLM
+    func getMessagesForLLM() -> [StoredMessage] {
+        // TEMPORARY FIX: Use local messages array instead of ConversationManager
+        // Convert local messages to StoredMessage format for sending to backend
+        let storedMessages = messages.prefix(25).map { msg in
+            StoredMessage.from(msg)
+        }
+        print("🎯 getMessagesForLLM returning \(storedMessages.count) messages from local array")
+        return storedMessages
     }
 
     // MARK: - Audio Visualization

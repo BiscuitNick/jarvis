@@ -409,6 +409,7 @@ struct QualityBadge: View {
         webRTCClient: WebRTCClient(),
         grpcClient: GRPCClient(),
         authService: AuthenticationService(),
-        speechRecognitionManager: SpeechRecognitionManager()
+        speechRecognitionManager: SpeechRecognitionManager(),
+        conversationManager: ConversationManager.shared
     ))
 }

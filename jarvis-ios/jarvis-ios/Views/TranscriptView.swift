@@ -8,11 +8,19 @@
 import SwiftUI
 
 struct TranscriptMessage: Identifiable {
-    let id = UUID()
+    let id: UUID
     let text: String
     let timestamp: Date
     let role: MessageRole
     let sources: [Citation]?
+
+    init(id: UUID = UUID(), text: String, timestamp: Date, role: MessageRole, sources: [Citation]? = nil) {
+        self.id = id
+        self.text = text
+        self.timestamp = timestamp
+        self.role = role
+        self.sources = sources
+    }
 
     enum MessageRole {
         case user
@@ -22,10 +30,17 @@ struct TranscriptMessage: Identifiable {
 }
 
 struct Citation: Identifiable {
-    let id = UUID()
+    let id: UUID
     let title: String
     let url: String?
     let snippet: String?
+
+    init(id: UUID = UUID(), title: String, url: String? = nil, snippet: String? = nil) {
+        self.id = id
+        self.title = title
+        self.url = url
+        self.snippet = snippet
+    }
 }
 
 struct TranscriptView: View {
