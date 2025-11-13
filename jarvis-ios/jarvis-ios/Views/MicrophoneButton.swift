@@ -102,54 +102,11 @@ struct LabeledMicrophoneButton: View {
     let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
-            MicrophoneButton(
-                isListening: isListening,
-                isActive: isActive,
-                action: action
-            )
-
-            // Status label
-            Text(statusText)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(statusColor)
-                .animation(.easeInOut, value: isListening)
-
-            // Instruction text
-            Text(instructionText)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-
-    private var statusText: String {
-        if isListening {
-            return "Listening..."
-        } else if isActive {
-            return "Ready"
-        } else {
-            return "Tap to speak"
-        }
-    }
-
-    private var statusColor: Color {
-        if isListening {
-            return .red
-        } else if isActive {
-            return .green
-        } else {
-            return .primary
-        }
-    }
-
-    private var instructionText: String {
-        if isListening {
-            return "Tap again to stop"
-        } else {
-            return "Or say 'Jarvis' to activate"
-        }
+        MicrophoneButton(
+            isListening: isListening,
+            isActive: isActive,
+            action: action
+        )
     }
 }
 

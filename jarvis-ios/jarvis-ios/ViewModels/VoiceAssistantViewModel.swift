@@ -80,6 +80,7 @@ class VoiceAssistantViewModel: ObservableObject {
     let grpcClient: GRPCClient
     let authService: AuthenticationService
     let speechRecognitionManager: SpeechRecognitionManager
+    let conversationManager: ConversationManager
 
     private var cancellables = Set<AnyCancellable>()
     private var currentTranscriptAdded = false // Track if current transcript was added to messages
@@ -90,13 +91,15 @@ class VoiceAssistantViewModel: ObservableObject {
         webRTCClient: WebRTCClient,
         grpcClient: GRPCClient,
         authService: AuthenticationService,
-        speechRecognitionManager: SpeechRecognitionManager
+        speechRecognitionManager: SpeechRecognitionManager,
+        conversationManager: ConversationManager
     ) {
         self.audioManager = audioManager
         self.webRTCClient = webRTCClient
         self.grpcClient = grpcClient
         self.authService = authService
         self.speechRecognitionManager = speechRecognitionManager
+        self.conversationManager = conversationManager
 
         // Load saved recognition mode from UserDefaults
         if let savedMode = UserDefaults.standard.string(forKey: "recognitionMode"),
@@ -123,6 +126,7 @@ class VoiceAssistantViewModel: ObservableObject {
             }
         }
 
+        loadMessagesFromConversation()
         setupBindings()
         setupSpeechRecognition()
     }
@@ -134,9 +138,34 @@ class VoiceAssistantViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        audioManager.$wakeWordEnabled
-            .sink { [weak self] enabled in
-                self?.wakeWordEnabled = enabled
+        // Don't bind wakeWordEnabled from AudioManager
+        // We manage this state explicitly through startWakeWordDetection/stopWakeWordDetection
+        // to avoid confusion between user preference and detector state
+
+        // Observe wake word detection from AudioManager's WakeWordDetector
+        audioManager.wakeWordDetector.$wakeWordDetected
+            .removeDuplicates() // Only trigger on changes
+            .sink { [weak self] detected in
+                guard let self = self else { return }
+                self.wakeWordDetected = detected
+
+                // Automatically start listening when wake word is detected (goes from false to true)
+                if detected && self.wakeWordEnabled && !self.isListening {
+                    print("🎯 VoiceAssistantViewModel: Wake word detected! Pausing wake word detector and starting listening...")
+
+                    // Temporarily stop wake word detection to avoid audio engine conflict
+                    // But DON'T set wakeWordEnabled to false - that's the user preference!
+                    self.audioManager.wakeWordDetector.stopListening()
+
+                    // Start listening after a small delay to ensure audio engine is released
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                        print("🎯 VoiceAssistantViewModel: Starting speech recognition...")
+                        self.startListening()
+                    }
+                } else if detected && self.isListening {
+                    print("ℹ️ VoiceAssistantViewModel: Wake word detected but already listening")
+                }
             }
             .store(in: &cancellables)
 
@@ -221,16 +250,20 @@ class VoiceAssistantViewModel: ObservableObject {
                 if isFinal {
                     print("📝 Final transcript (callback): \(transcript)")
 
-                    // Add to messages only if not already added
-                    if !self.currentTranscriptAdded {
+                    // Only process if we have actual content and it hasn't been added yet
+                    if !transcript.isEmpty && !self.currentTranscriptAdded {
                         self.addUserMessage(transcript)
                         self.currentTranscriptAdded = true
-                    }
 
-                    // Send to backend based on mode
-                    if self.recognitionMode != .professionalMode {
-                        // For native speech modes, send text via gRPC
-                        await self.sendTranscriptToBackend(transcript)
+                        // Send to backend based on mode
+                        if self.recognitionMode != .professionalMode {
+                            // For native speech modes, send text via gRPC
+                            await self.sendTranscriptToBackend(transcript)
+                        }
+                    } else if transcript.isEmpty {
+                        print("ℹ️ Ignoring empty final transcript")
+                    } else if self.currentTranscriptAdded {
+                        print("ℹ️ Transcript already processed, ignoring duplicate final")
                     }
                 }
             }
@@ -271,13 +304,45 @@ class VoiceAssistantViewModel: ObservableObject {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+            // DEBUG: First check what's in the local messages array
+            print("🔍 Local messages array has \(messages.count) messages")
+            for (index, msg) in messages.enumerated() {
+                print("  Local Message \(index): [\(msg.role)] \(String(msg.text.prefix(50)))...")
+            }
+
+            // Get conversation history (last 25 messages for context)
+            let conversationHistory = getMessagesForLLM()
+
+            // Convert to format expected by backend
+            let historyMessages = conversationHistory.map { message -> [String: Any] in
+                let role: String
+                switch message.role {
+                case .user: role = "user"
+                case .assistant: role = "assistant"
+                case .system: role = "system"
+                }
+                return [
+                    "role": role,
+                    "content": message.text
+                ]
+            }
+
             let body: [String: Any] = [
                 "message": transcript,
-                "intent": "conversational"
+                "history": historyMessages
+                // Let backend auto-classify intent to enable RAG for critical queries
             ]
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let jsonData = try JSONSerialization.data(withJSONObject: body)
+            request.httpBody = jsonData
+
+            // Debug: Print the actual JSON being sent
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                print("📤 Full JSON Request Body:")
+                print(jsonString)
+            }
 
             print("🌐 Calling chat API at \(url.absoluteString)...")
+            print("📜 Including \(historyMessages.count) messages in conversation history")
             let session = AppEnvironment.makeURLSession()
             let (data, response) = try await session.data(for: request)
 
@@ -305,8 +370,30 @@ class VoiceAssistantViewModel: ObservableObject {
 
             print("✅ Got response: \(content)")
 
-            // Add to messages
-            addAssistantMessage(content)
+            // Parse sources/citations if available
+            var citations: [Citation]? = nil
+            if let sources = json?["sources"] as? [[String: Any]], !sources.isEmpty {
+                citations = sources.compactMap { sourceDict in
+                    guard let url = sourceDict["url"] as? String ?? sourceDict["source"] as? String else {
+                        return nil
+                    }
+                    return Citation(
+                        title: sourceDict["title"] as? String ?? "Source",
+                        url: url,
+                        snippet: sourceDict["excerpt"] as? String ?? sourceDict["snippet"] as? String
+                    )
+                }
+                print("📚 Retrieved \(citations?.count ?? 0) citations")
+            }
+
+            // Log grounding info if available
+            if let isGrounded = json?["isGrounded"] as? Bool {
+                let confidence = json?["groundingConfidence"] as? Double ?? 0.0
+                print("🎯 Response grounding: \(isGrounded) (confidence: \(String(format: "%.2f", confidence)))")
+            }
+
+            // Add to messages with citations
+            addAssistantMessage(content, sources: citations)
 
             // Speak the response using iOS native TTS
             speakText(content)
@@ -318,6 +405,21 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     private func speakText(_ text: String) {
+        // Ensure audio session supports playback
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            // Verify we're in playAndRecord mode for TTS to work
+            if audioSession.category != .playAndRecord {
+                print("⚠️ TTS: Audio session not in playAndRecord mode, fixing...")
+                try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers])
+            }
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            print("🔊 TTS: Audio session ready (category: \(audioSession.category.rawValue))")
+        } catch {
+            print("❌ Failed to prepare audio session for TTS: \(error)")
+            return
+        }
+
         // Stop any ongoing speech first
         if speechSynthesizer.isSpeaking {
             speechSynthesizer.stopSpeaking(at: .immediate)
@@ -343,14 +445,26 @@ class VoiceAssistantViewModel: ObservableObject {
     }
 
     func startWakeWordDetection() async {
+        print("📢 VoiceAssistantViewModel: Starting wake word detection (user enabled)")
+        // Set the user preference flag
+        audioManager.wakeWordEnabled = true
+        wakeWordEnabled = true
         do {
             try await audioManager.startWakeWordDetection()
+            print("✅ VoiceAssistantViewModel: Wake word detection started")
         } catch {
-            print("Failed to start wake word detection: \(error)")
+            print("❌ Failed to start wake word detection: \(error)")
+            // Reset flags on failure
+            audioManager.wakeWordEnabled = false
+            wakeWordEnabled = false
         }
     }
 
     func stopWakeWordDetection() {
+        print("📢 VoiceAssistantViewModel: Stopping wake word detection (user disabled)")
+        // Clear the user preference flag
+        audioManager.wakeWordEnabled = false
+        wakeWordEnabled = false
         audioManager.stopWakeWordDetection()
     }
 
@@ -457,6 +571,46 @@ class VoiceAssistantViewModel: ObservableObject {
             // Stop WebRTC streaming
             audioManager.stopRecording()
             stopAudioStreaming()
+        }
+
+        // Restart wake word detection if the user has it enabled in settings
+        // wakeWordEnabled represents the user's preference - if true, keep it running
+        if wakeWordEnabled {
+            print("🔄 VoiceAssistantViewModel: User has wake word enabled, restarting detection...")
+            Task {
+                // Longer delay to ensure all audio resources released and TTS can finish
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1.0 second
+
+                // Check if TTS is speaking and wait for it to finish
+                if self.speechSynthesizer.isSpeaking {
+                    print("🔊 TTS is speaking, waiting to restart wake word...")
+                    // Wait for TTS to finish
+                    var attempts = 0
+                    while self.speechSynthesizer.isSpeaking && attempts < 20 {  // Max 10 seconds wait
+                        try? await Task.sleep(nanoseconds: 500_000_000)  // Check every 0.5 seconds
+                        attempts += 1
+                    }
+                    if attempts >= 20 {
+                        print("⚠️ TTS took too long, proceeding with wake word restart")
+                    } else {
+                        print("✅ TTS finished, now restarting wake word")
+                    }
+                }
+
+                // Only restart if it's not already listening (avoid duplicate starts)
+                if !audioManager.wakeWordDetector.isListening {
+                    do {
+                        try await audioManager.startWakeWordDetection()
+                        print("✅ VoiceAssistantViewModel: Wake word detection restarted successfully")
+                    } catch {
+                        print("❌ VoiceAssistantViewModel: Failed to restart wake word detection: \(error)")
+                    }
+                } else {
+                    print("ℹ️ VoiceAssistantViewModel: Wake word detection already running")
+                }
+            }
+        } else {
+            print("ℹ️ VoiceAssistantViewModel: Wake word not enabled by user, not restarting")
         }
     }
 
@@ -568,6 +722,9 @@ class VoiceAssistantViewModel: ObservableObject {
         )
         messages.append(message)
         transcript = text
+
+        // Save to conversation manager
+        conversationManager.addMessage(StoredMessage.from(message))
     }
 
     func addAssistantMessage(_ text: String, sources: [Citation]? = nil) {
@@ -579,6 +736,9 @@ class VoiceAssistantViewModel: ObservableObject {
         )
         messages.append(message)
         isStreaming = false
+
+        // Save to conversation manager
+        conversationManager.addMessage(StoredMessage.from(message))
     }
 
     func addSystemMessage(_ text: String) {
@@ -589,6 +749,9 @@ class VoiceAssistantViewModel: ObservableObject {
             sources: nil
         )
         messages.append(message)
+
+        // Save to conversation manager
+        conversationManager.addMessage(StoredMessage.from(message))
     }
 
     func startStreaming() {
@@ -599,6 +762,46 @@ class VoiceAssistantViewModel: ObservableObject {
         messages.removeAll()
         transcript = ""
         isStreaming = false
+        conversationManager.clearCurrentConversation()
+    }
+
+    // MARK: - Conversation Management
+
+    /// Load messages from the current conversation
+    private func loadMessagesFromConversation() {
+        guard let conversation = conversationManager.currentConversation else {
+            print("⚠️ No current conversation to load messages from")
+            return
+        }
+        messages = conversation.messages.map { $0.toTranscriptMessage() }
+        print("✅ Loaded \(messages.count) messages from conversation")
+    }
+
+    /// Create a new conversation
+    func createNewConversation() {
+        conversationManager.createNewConversation()
+        messages.removeAll()
+        transcript = ""
+        isStreaming = false
+    }
+
+    /// Load a previous conversation
+    func loadConversation(_ conversation: Conversation) {
+        conversationManager.loadConversation(conversation)
+        loadMessagesFromConversation()
+        transcript = ""
+        isStreaming = false
+    }
+
+    /// Get the last 25 messages to send to LLM
+    func getMessagesForLLM() -> [StoredMessage] {
+        // TEMPORARY FIX: Use local messages array instead of ConversationManager
+        // Convert local messages to StoredMessage format for sending to backend
+        let storedMessages = messages.prefix(25).map { msg in
+            StoredMessage.from(msg)
+        }
+        print("🎯 getMessagesForLLM returning \(storedMessages.count) messages from local array")
+        return storedMessages
     }
 
     // MARK: - Audio Visualization

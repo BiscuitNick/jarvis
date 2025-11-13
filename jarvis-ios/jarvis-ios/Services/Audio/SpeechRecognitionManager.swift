@@ -128,9 +128,16 @@ class SpeechRecognitionManager: ObservableObject {
                 if let error = error {
                     let nsError = error as NSError
 
-                    // Filter out error 1101 logging (it's a spurious error we can ignore)
+                    // Log error 1101 with audio session state for debugging
                     if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1101 {
-                        print("⚠️ Ignoring spurious speech recognition error 1101 (continuing recognition)")
+                        // Log session state for debugging
+                        let session = AVAudioSession.sharedInstance()
+                        print("⚠️ Speech recognition error 1101 - Audio session state:")
+                        print("   Category: \(session.category.rawValue)")
+                        print("   Mode: \(session.mode.rawValue)")
+                        print("   Other audio playing: \(session.isOtherAudioPlaying)")
+                        print("   Sample rate: \(session.sampleRate)Hz")
+                        print("   Input available: \(session.isInputAvailable)")
                         // Don't cleanup for this error - it's spurious and recognition can continue
                     } else if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1110 {
                         // Error 1110 = "No speech detected"

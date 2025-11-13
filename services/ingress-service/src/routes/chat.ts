@@ -2,6 +2,7 @@
  * chat.ts
  *
  * Text-based chat API routes for iOS app integration
+ * Now with full RAG support and intent classification
  */
 
 import express, { Request, Response } from 'express';
@@ -9,6 +10,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger';
 import { getPool } from '../db/pool';
+import { classifyIntentWithLLM } from '../utils/intentClassifier';
 
 const router = express.Router();
 
@@ -20,9 +22,16 @@ const LLM_ROUTER_URL = process.env.LLM_ROUTER_URL || 'http://llm-router:3003';
  */
 router.post('/message', async (req: Request, res: Response) => {
   try {
-    const { message, conversationId, intent } = req.body;
+    const { message, conversationId, intent: userProvidedIntent, history: clientHistory } = req.body;
     // AUTH DISABLED - Using dummy userId for testing (valid UUID format)
     const userId = '00000000-0000-0000-0000-000000000001'; // (req as any).userId; // Set by auth middleware
+
+    // DEBUG: Log entire request body
+    logger.info({
+      requestBody: req.body,
+      hasHistory: !!clientHistory,
+      historyLength: Array.isArray(clientHistory) ? clientHistory.length : 0
+    }, 'DEBUG: Request body received');
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -32,11 +41,23 @@ router.post('/message', async (req: Request, res: Response) => {
     const messageId = uuidv4();
     const timestamp = new Date().toISOString();
 
-    // Build conversation history if conversationId provided
+    // Build conversation history
     let messages: Array<{ role: string; content: string }> = [];
 
-    if (conversationId) {
-      // Fetch conversation history from database
+    // Priority 1: Use history from iOS app if provided (local conversation management)
+    if (clientHistory && Array.isArray(clientHistory)) {
+      messages = clientHistory.map((msg: any) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+      logger.info({ messageCount: messages.length }, 'Using client-provided conversation history');
+      // Debug log the actual messages
+      messages.forEach((msg, index) => {
+        logger.info({ index, role: msg.role, contentPreview: msg.content.substring(0, 50) }, 'History message');
+      });
+    }
+    // Priority 2: Fallback to database lookup if conversationId provided (backward compatibility)
+    else if (conversationId) {
       const pool = getPool();
       const historyResult = await pool.query(
         `SELECT role, content FROM conversation_messages
@@ -50,6 +71,7 @@ router.post('/message', async (req: Request, res: Response) => {
         role: row.role,
         content: row.content,
       }));
+      logger.info({ messageCount: messages.length }, 'Using database conversation history');
     }
 
     // Add current user message
@@ -58,14 +80,27 @@ router.post('/message', async (req: Request, res: Response) => {
       content: message,
     });
 
-    // Call LLM router
-    logger.info({ userId, messageId, conversationId }, 'Sending message to LLM');
+    // Classify intent using LLM (unless explicitly provided)
+    const intent = userProvidedIntent || (await classifyIntentWithLLM(message));
+
+    // Call LLM router with proper intent classification
+    logger.info({
+      userId,
+      messageId,
+      conversationId,
+      intent,
+      message: message.substring(0, 100),
+      totalMessagesCount: messages.length
+    }, 'Sending message to LLM with RAG');
+
+    // Debug: Log all messages being sent to LLM
+    logger.info({ messagesBeingSent: messages.map(m => ({ role: m.role, preview: m.content.substring(0, 30) })) }, 'Full message array to LLM');
 
     const llmResponse = await axios.post(
       `${LLM_ROUTER_URL}/complete`,
       {
         messages,
-        intent: intent || 'conversational',
+        intent, // Now properly classified to trigger RAG when needed
         temperature: 0.7,
         maxTokens: 1000,
       },
@@ -77,7 +112,7 @@ router.post('/message', async (req: Request, res: Response) => {
       }
     );
 
-    const { content, provider, model, latency, sources } = llmResponse.data;
+    const { content, provider, model, latency, sources, grounding, usage } = llmResponse.data;
 
     // Store messages in database (skip for test user)
     const isTestUser = userId === '00000000-0000-0000-0000-000000000001';
@@ -118,23 +153,38 @@ router.post('/message', async (req: Request, res: Response) => {
       );
     }
 
-    // Return response
+    // Return response with full RAG metadata
     res.json({
       messageId: assistantMessageId,
       conversationId: actualConversationId,
       content,
       timestamp,
+      intent, // Include classified intent for debugging
       metadata: {
         provider,
         model,
         latency,
         sources: sources || [],
+        grounding: grounding || null,
+        usage: usage || null,
       },
+      // Make sources easily accessible at top level for iOS app
+      sources: sources || [],
+      isGrounded: grounding?.isGrounded || false,
+      groundingConfidence: grounding?.confidence || 0,
     });
 
     logger.info(
-      { userId, messageId, conversationId: actualConversationId, latency },
-      'Chat message completed'
+      {
+        userId,
+        messageId,
+        conversationId: actualConversationId,
+        latency,
+        intent,
+        sourceCount: sources?.length || 0,
+        isGrounded: grounding?.isGrounded,
+      },
+      'Chat message completed with RAG'
     );
   } catch (error: any) {
     logger.error({ error, userId: (req as any).userId }, 'Chat message failed');

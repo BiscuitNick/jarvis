@@ -10,19 +10,22 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel: VoiceAssistantViewModel
     @State private var showSettings = false
+    @State private var showConversationHistory = false
 
     init(authService: AuthenticationService) {
         let audioManager = AudioManager()
         let webRTCClient = WebRTCClient()
         let grpcClient = GRPCClient()
         let speechRecognitionManager = SpeechRecognitionManager()
+        let conversationManager = ConversationManager.shared
 
         _viewModel = StateObject(wrappedValue: VoiceAssistantViewModel(
             audioManager: audioManager,
             webRTCClient: webRTCClient,
             grpcClient: grpcClient,
             authService: authService,
-            speechRecognitionManager: speechRecognitionManager
+            speechRecognitionManager: speechRecognitionManager,
+            conversationManager: conversationManager
         ))
     }
 
@@ -83,6 +86,12 @@ struct ContentView: View {
             .navigationTitle("Jarvis")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { showConversationHistory.toggle() }) {
+                        Image(systemName: "message")
+                            .foregroundColor(.white)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showSettings.toggle() }) {
                         Image(systemName: "gearshape")
@@ -92,6 +101,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showConversationHistory) {
+                ConversationHistoryView(
+                    conversationManager: viewModel.conversationManager,
+                    viewModel: viewModel
+                )
             }
             .task {
                 // Run initialization in background without blocking UI
