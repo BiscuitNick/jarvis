@@ -2,6 +2,7 @@
  * RAG Service client for retrieving grounded context
  */
 
+import axios from 'axios';
 import { RetrievalContext, RetrievedDocument } from './types';
 
 export class RAGClient {
@@ -16,22 +17,17 @@ export class RAGClient {
    */
   async retrieve(query: string, limit: number = 5): Promise<RetrievalContext> {
     try {
-      const response = await fetch(`${this.baseUrl}/search`, {
-        method: 'POST',
+      const response = await axios.post(`${this.baseUrl}/search`, {
+        query,
+        limit,
+      }, {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          query,
-          limit,
-        }),
+        timeout: 10000, // 10 second timeout
       });
 
-      if (!response.ok) {
-        throw new Error(`RAG service returned ${response.status}: ${response.statusText}`);
-      }
-
-      const data: any = await response.json();
+      const data: any = response.data;
 
       // Transform RAG service response to RetrievalContext
       const documents: RetrievedDocument[] = (data.results || []).map((result: any) => ({
@@ -61,11 +57,11 @@ export class RAGClient {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/healthz`, {
-        method: 'GET',
+      const response = await axios.get(`${this.baseUrl}/healthz`, {
+        timeout: 5000, // 5 second timeout
       });
 
-      return response.ok;
+      return response.status === 200;
     } catch (error) {
       console.error('[RAGClient] Health check failed:', error);
       return false;
