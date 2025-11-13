@@ -162,7 +162,7 @@ export class DocumentIngestionService {
             documentId,
             chunk.text,
             chunk.index,
-            JSON.stringify(embedding.embedding), // pgvector expects array as string
+            `[${embedding.embedding.join(',')}]`, // pgvector expects array format: [1,2,3]
             embedding.model,
             chunk.metadata,
           ]

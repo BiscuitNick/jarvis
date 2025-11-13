@@ -241,20 +241,28 @@ app.post('/complete/stream', async (req, res) => {
         }
 
         // Send final metadata
+        // Deduplicate sources by URL
+        const uniqueSources = new Map();
+        context?.documents.forEach((d: any) => {
+          if (!uniqueSources.has(d.source) || uniqueSources.get(d.source).relevance < d.relevance) {
+            uniqueSources.set(d.source, {
+              url: d.source,
+              title: d.metadata?.title || d.metadata?.documentTitle || d.source.split('/').pop() || d.source,
+              excerpt: d.content.substring(0, 200) + (d.content.length > 200 ? '...' : ''),
+              relevance: d.relevance
+            });
+          }
+        });
+
         const metadata = {
           done: true,
           latency,
           intent,
-          sources: context?.documents.map((d: any) => ({
-            url: d.source,
-            title: d.metadata?.title || d.source,
-            excerpt: d.content.substring(0, 200) + (d.content.length > 200 ? '...' : ''),
-            relevance: d.relevance
-          })) || [],
+          sources: Array.from(uniqueSources.values()),
           grounding: groundingValidation,
           citations:
             intent === IntentType.CRITICAL && context
-              ? context.documents.filter((d: any) => d.relevance > 0.5).map((d: any) => d.source)
+              ? Array.from(new Set(context.documents.filter((d: any) => d.relevance > 0.5).map((d: any) => d.source)))
               : [],
         };
 

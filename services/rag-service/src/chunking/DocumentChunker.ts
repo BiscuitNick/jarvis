@@ -36,7 +36,11 @@ export class DocumentChunker {
     // Normalize line endings
     const normalized = content.replace(/\r\n/g, '\n');
 
-    if (opts.preserveParagraphs) {
+    // For large documents (>10KB), use simple sliding window to avoid memory issues
+    if (normalized.length > 10000) {
+      console.log(`[DocumentChunker] Large document detected (${normalized.length} chars), using simple chunking`);
+      chunks.push(...this.slidingWindowChunk(normalized, opts));
+    } else if (opts.preserveParagraphs) {
       // Split by paragraphs first
       const paragraphs = this.splitIntoParagraphs(normalized);
       chunks.push(...this.chunkParagraphs(paragraphs, opts));
@@ -52,6 +56,16 @@ export class DocumentChunker {
    * Split text into paragraphs
    */
   private splitIntoParagraphs(text: string): string[] {
+    // For very large documents, use simpler splitting to avoid regex catastrophic backtracking
+    if (text.length > 10000) {
+      // Simple split by double newlines only
+      const paragraphs = text
+        .split(/\n\n+/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+      return paragraphs;
+    }
+
     // Split by double newlines or markdown headers
     const paragraphs = text
       .split(/\n\n+|(?=^#{1,6} )/m)
@@ -138,39 +152,53 @@ export class DocumentChunker {
     const chunks: DocumentChunk[] = [];
     let start = 0;
 
+    console.log(`[DocumentChunker] Starting sliding window chunking for ${text.length} chars`);
+
     while (start < text.length) {
       const end = Math.min(start + options.maxChunkSize, text.length);
-      let chunkText = text.substring(start, end);
+      let actualEnd = end;
 
       // Try to break at sentence or word boundary if not at the end
       if (end < text.length) {
-        const lastSentence = chunkText.lastIndexOf('. ');
-        const lastNewline = chunkText.lastIndexOf('\n');
-        const lastSpace = chunkText.lastIndexOf(' ');
+        // Look for break points in a smaller window to avoid searching entire chunk
+        const searchStart = Math.max(end - 200, start + options.maxChunkSize * 0.5);
+        const searchText = text.substring(searchStart, end);
+
+        const lastSentence = searchText.lastIndexOf('. ');
+        const lastNewline = searchText.lastIndexOf('\n');
+        const lastSpace = searchText.lastIndexOf(' ');
 
         const breakPoint = Math.max(lastSentence, lastNewline, lastSpace);
 
-        if (breakPoint > options.maxChunkSize * 0.5) {
-          // Only break if we're at least 50% through the chunk
-          chunkText = chunkText.substring(0, breakPoint + 1).trim();
+        if (breakPoint > 0) {
+          actualEnd = searchStart + breakPoint + 1;
         }
       }
 
-      chunks.push({
-        text: chunkText,
-        index: chunks.length,
-        metadata: {
-          startOffset: start,
-          endOffset: start + chunkText.length,
-          characterCount: chunkText.length,
-        },
-      });
+      const chunkText = text.substring(start, actualEnd).trim();
+
+      if (chunkText.length > 0) {
+        chunks.push({
+          text: chunkText,
+          index: chunks.length,
+          metadata: {
+            startOffset: start,
+            endOffset: actualEnd,
+            characterCount: chunkText.length,
+          },
+        });
+      }
 
       // Move start position with overlap
-      start += chunkText.length - options.overlapSize;
-      if (start < 0) start = 0;
+      start = actualEnd - Math.min(options.overlapSize, actualEnd - start);
+
+      // Prevent infinite loop
+      if (start <= chunks.length * 10 && chunks.length > 0) {
+        start = actualEnd;
+      }
     }
 
+    console.log(`[DocumentChunker] Created ${chunks.length} chunks`);
     return chunks;
   }
 

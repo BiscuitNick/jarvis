@@ -23,14 +23,14 @@ export class EmbeddingService {
   private maxBatchSize: number = 100; // OpenAI limit
   private dimension: number = 1536; // text-embedding-ada-002 dimension
 
-  constructor(apiKey?: string, model: string = 'text-embedding-ada-002') {
+  constructor(apiKey?: string, model: string = 'text-embedding-3-small') {
     this.openai = new OpenAI({
       apiKey: apiKey || process.env.OPENAI_API_KEY,
     });
     this.model = model;
 
     // Set dimension based on model
-    if (model === 'text-embedding-3-small') {
+    if (model === 'text-embedding-3-small' || model === 'text-embedding-ada-002') {
       this.dimension = 1536;
     } else if (model === 'text-embedding-3-large') {
       this.dimension = 3072;
@@ -66,29 +66,40 @@ export class EmbeddingService {
     const allEmbeddings: EmbeddingResult[] = [];
     let totalTokens = 0;
 
-    // Process in batches
-    for (let i = 0; i < texts.length; i += this.maxBatchSize) {
-      const batch = texts.slice(i, Math.min(i + this.maxBatchSize, texts.length));
+    console.log(`[EmbeddingService] Generating embeddings for ${texts.length} texts in batches of ${this.maxBatchSize}`);
+
+    // Process in smaller batches to reduce memory usage
+    const batchSize = Math.min(this.maxBatchSize, 20); // Reduce batch size to 20
+
+    for (let i = 0; i < texts.length; i += batchSize) {
+      const batch = texts.slice(i, Math.min(i + batchSize, texts.length));
 
       try {
+        console.log(`[EmbeddingService] Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(texts.length/batchSize)}`);
+
         const response = await this.openai.embeddings.create({
           model: this.model,
           input: batch,
         });
 
-        const batchResults = response.data.map((item, idx) => ({
-          embedding: item.embedding,
-          text: batch[idx],
-          model: this.model,
-          tokens: 0, // Individual token count not provided in batch
-        }));
+        // Process results one by one to avoid memory spikes
+        for (let idx = 0; idx < response.data.length; idx++) {
+          allEmbeddings.push({
+            embedding: response.data[idx].embedding,
+            text: batch[idx],
+            model: this.model,
+            tokens: 0, // Individual token count not provided in batch
+          });
+        }
 
-        allEmbeddings.push(...batchResults);
         totalTokens += response.usage.total_tokens;
 
+        // Clear response from memory
+        response.data = [];
+
         // Rate limiting delay between batches
-        if (i + this.maxBatchSize < texts.length) {
-          await this.delay(100); // 100ms delay between batches
+        if (i + batchSize < texts.length) {
+          await this.delay(200); // Increased delay between batches
         }
       } catch (error) {
         console.error(`[EmbeddingService] Error generating batch embeddings (batch ${i}):`, error);

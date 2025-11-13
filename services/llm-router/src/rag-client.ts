@@ -35,8 +35,8 @@ export class RAGClient {
 
       // Transform RAG service response to RetrievalContext
       const documents: RetrievedDocument[] = (data.results || []).map((result: any) => ({
-        content: result.chunk_text || result.content || '',
-        source: result.source_url || result.source || 'Unknown',
+        content: result.chunkText || result.chunk_text || result.content || '',
+        source: result.sourceUrl || result.source_url || result.source || 'Unknown',
         relevance: result.similarity || result.relevance || 0,
         metadata: result.metadata || {},
       }));

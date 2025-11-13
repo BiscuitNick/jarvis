@@ -25,9 +25,9 @@ function buildCriticalSystemPrompt(context?: RetrievalContext): string {
 CRITICAL RULES:
 1. ONLY use information from the provided context documents
 2. If the context doesn't contain the answer, say "I don't have that information in my knowledge base"
-3. ALWAYS cite your sources by mentioning the document name or URL
-4. DO NOT make up information or use knowledge outside the provided context
-5. Be concise and direct in your responses
+3. DO NOT make up information or use knowledge outside the provided context
+4. Be concise and direct in your responses
+5. Do not mention sources or citations in your response
 `;
 
   if (context && context.documents.length > 0) {
@@ -36,7 +36,7 @@ CRITICAL RULES:
       prompt += `\n[Document ${index + 1}: ${doc.source}]\n${doc.content}\n`;
     });
 
-    prompt += '\n\nRemember: Only use information from these documents and cite your sources.';
+    prompt += '\n\nRemember: Only use information from these documents.';
   } else {
     prompt += '\n\nNo context documents are available. You must inform the user that you cannot answer without access to relevant information.';
   }
@@ -60,22 +60,11 @@ For simple greetings and casual interactions, respond naturally without requirin
 
 /**
  * Inject citations into a response
+ * NOTE: Disabled - citations are now only shown in the expandable sources section
  */
 export function injectCitations(response: string, context?: RetrievalContext): string {
-  if (!context || context.documents.length === 0) {
-    return response;
-  }
-
-  // Build citations list
-  const citations = context.documents
-    .filter((doc) => doc.relevance > 0.5) // Only include relevant docs
-    .map((doc, index) => `[${index + 1}] ${doc.source}`)
-    .join('\n');
-
-  if (citations) {
-    return `${response}\n\nSources:\n${citations}`;
-  }
-
+  // No longer inject citations into the response text
+  // Citations are handled separately in the sources metadata
   return response;
 }
 
