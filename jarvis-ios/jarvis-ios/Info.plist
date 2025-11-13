@@ -11,7 +11,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Jarvis needs access to your microphone to listen to your voice commands and have conversations with you.</string>
 	<key>API_BASE_URL</key>
-	<string>http://10.10.0.44:3000</string>
+	<string>http://44.219.80.150:3003</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Jarvis uses speech recognition to understand your voice commands and wake word detection.</string>
 	<key>NSLocalNetworkUsageDescription</key>
@@ -34,6 +34,11 @@
 				<false/>
 				<key>NSExceptionMinimumTLSVersion</key>
 				<string>TLSv1.2</string>
+			</dict>
+			<key>44.219.80.150</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
 			</dict>
 		</dict>
 	</dict>

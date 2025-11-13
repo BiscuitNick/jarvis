@@ -1,9 +1,87 @@
 /**
  * Intent-based prompt engineering for RAG integration
- * Note: Intent classification is now handled by the ingress-service using LLM-based classification
  */
 
 import { IntentType, Message, RetrievalContext } from './types';
+import { ProviderManager } from './ProviderManager';
+
+// Simple in-memory cache to avoid repeated LLM calls
+const intentCache = new Map<string, { intent: IntentType; timestamp: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+let providerManager: ProviderManager;
+
+export function initializeIntentClassifier(manager: ProviderManager) {
+  providerManager = manager;
+}
+
+/**
+ * Classify intent using LLM
+ */
+export async function classifyIntent(query: string): Promise<IntentType> {
+  // Check cache first
+  const cacheKey = query.toLowerCase().trim();
+  const cached = intentCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.intent;
+  }
+
+  try {
+    // Call LLM with classification prompt
+    const response = await providerManager.complete({
+      messages: [
+        {
+          role: 'system',
+          content: `You are an intent classifier. Classify the user's query as either "critical" or "casual".
+
+CRITICAL queries:
+- Questions about technical documentation, APIs, systems, features
+- "What is X?", "How does Y work?", "Explain Z"
+- Requests for specific information from documentation
+- Technical how-to questions
+
+CASUAL queries:
+- Greetings, farewells, small talk
+- Entertainment requests (jokes, stories)
+- General questions not requiring specific documentation
+- Casual conversation, opinions, preferences
+
+Respond with ONLY the word "critical" or "casual", nothing else.`,
+        },
+        {
+          role: 'user',
+          content: query,
+        },
+      ],
+      temperature: 0.1,
+      maxTokens: 10,
+      stream: false,
+      intent: IntentType.CASUAL, // Don't trigger RAG for classification itself
+    });
+
+    const classification = response.content.toLowerCase().trim();
+    const intent = classification.includes('critical') ? IntentType.CRITICAL : IntentType.CASUAL;
+
+    // Cache the result
+    intentCache.set(cacheKey, { intent, timestamp: Date.now() });
+
+    // Cleanup old cache entries periodically
+    if (intentCache.size > 1000) {
+      const now = Date.now();
+      for (const [key, value] of intentCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL_MS) {
+          intentCache.delete(key);
+        }
+      }
+    }
+
+    return intent;
+  } catch (error) {
+    console.error('[Intent] Classification failed, defaulting to casual:', error);
+    return IntentType.CASUAL;
+  }
+}
 
 /**
  * Build system prompt based on intent type

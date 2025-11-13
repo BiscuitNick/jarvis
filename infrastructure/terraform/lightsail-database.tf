@@ -28,11 +28,13 @@ resource "aws_lightsail_database" "jarvis" {
 }
 
 # Allow Lightsail instance to connect to database
-resource "aws_lightsail_database_security_group_rule" "allow_instance" {
-  count = var.enable_managed_database ? 1 : 0
-
-  database_name = aws_lightsail_database.jarvis[0].relational_database_name
-
-  # Allow traffic from the Lightsail instance
-  source_instance_name = aws_lightsail_instance.jarvis.name
-}
+# NOTE: This resource type doesn't exist in AWS provider
+# Database access is managed through network security groups instead
+# resource "aws_lightsail_database_security_group_rule" "allow_instance" {
+#   count = var.enable_managed_database ? 1 : 0
+#
+#   database_name = aws_lightsail_database.jarvis[0].relational_database_name
+#
+#   # Allow traffic from the Lightsail instance
+#   source_instance_name = aws_lightsail_instance.jarvis.name
+# }

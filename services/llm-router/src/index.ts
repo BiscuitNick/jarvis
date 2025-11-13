@@ -2,7 +2,7 @@ import express from 'express';
 import { getPool, connectWithRetry, closePool } from './db/pool';
 import { ProviderManager } from './ProviderManager';
 import { RAGClient } from './rag-client';
-import { buildSystemPrompt, injectCitations, validateGrounding } from './intent';
+import { buildSystemPrompt, injectCitations, validateGrounding, initializeIntentClassifier, classifyIntent } from './intent';
 import { CompletionRequest, IntentType } from './types';
 
 const app = express();
@@ -77,9 +77,15 @@ app.post('/complete', async (req, res) => {
     // Get the user's query (last message)
     const userQuery = messages[messages.length - 1]?.content || '';
 
-    // Use provided intent or default to conversational (caller should classify)
-    let intent = userIntent || IntentType.CASUAL;
-    console.log(`[llm-router] Intent: ${intent} (${userIntent ? 'provided' : 'defaulted'})`);
+    // Classify intent if not provided
+    let intent = userIntent;
+    if (!intent) {
+      console.log('[llm-router] No intent provided, classifying...');
+      intent = await classifyIntent(userQuery);
+      console.log(`[llm-router] Intent: ${intent} (classified)`);
+    } else {
+      console.log(`[llm-router] Intent: ${intent} (provided)`);
+    }
 
     let context;
 
@@ -305,6 +311,9 @@ async function start() {
 
     // Initialize provider manager
     providerManager = new ProviderManager();
+
+    // Initialize intent classifier
+    initializeIntentClassifier(providerManager);
 
     // Initialize RAG client
     ragClient = new RAGClient();

@@ -296,8 +296,8 @@ class VoiceAssistantViewModel: ObservableObject {
             let accessToken = "dummy-token-for-testing"
             print("⚠️ Auth disabled - using test token")
 
-            // Call chat API
-            let url = AppEnvironment.apiURL(path: "/api/chat/message")
+            // Call LLM Router API
+            let url = AppEnvironment.apiURL(path: "/complete")
 
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -313,8 +313,8 @@ class VoiceAssistantViewModel: ObservableObject {
             // Get conversation history (last 25 messages for context)
             let conversationHistory = getMessagesForLLM()
 
-            // Convert to format expected by backend
-            let historyMessages = conversationHistory.map { message -> [String: Any] in
+            // Convert to format expected by LLM Router (/complete endpoint)
+            var allMessages = conversationHistory.map { message -> [String: Any] in
                 let role: String
                 switch message.role {
                 case .user: role = "user"
@@ -327,10 +327,17 @@ class VoiceAssistantViewModel: ObservableObject {
                 ]
             }
 
+            // Add current user message
+            allMessages.append([
+                "role": "user",
+                "content": transcript
+            ])
+
             let body: [String: Any] = [
-                "message": transcript,
-                "history": historyMessages
-                // Let backend auto-classify intent to enable RAG for critical queries
+                "messages": allMessages,
+                "temperature": 0.7,
+                "maxTokens": 1000
+                // Backend will auto-classify intent to enable RAG for critical queries
             ]
             let jsonData = try JSONSerialization.data(withJSONObject: body)
             request.httpBody = jsonData
@@ -341,8 +348,8 @@ class VoiceAssistantViewModel: ObservableObject {
                 print(jsonString)
             }
 
-            print("🌐 Calling chat API at \(url.absoluteString)...")
-            print("📜 Including \(historyMessages.count) messages in conversation history")
+            print("🌐 Calling LLM Router at \(url.absoluteString)...")
+            print("📜 Including \(allMessages.count) messages in request")
             let session = AppEnvironment.makeURLSession()
             let (data, response) = try await session.data(for: request)
 
