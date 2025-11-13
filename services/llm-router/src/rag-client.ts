@@ -20,6 +20,7 @@ export class RAGClient {
       const response = await axios.post(`${this.baseUrl}/search`, {
         query,
         limit,
+        similarityThreshold: 0.4, // Lower threshold for better recall
       }, {
         headers: {
           'Content-Type': 'application/json',
